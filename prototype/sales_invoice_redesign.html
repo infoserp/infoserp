@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sales Invoice — Redesign Prototype</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="../vendor/font-awesome/css/font-awesome.min.css" rel="stylesheet">
+<style>
+/* ── Design tokens ─────────────────────────────────────────────
+   blue  = brand / primary action
+   green = success / approved
+   amber = draft / warning
+   red   = errors, validation, destructive actions only           */
+:root {
+    --primary: #2563eb;
+    --primary-hover: #1d4ed8;
+    --primary-ring: rgba(37, 99, 235, .18);
+    --bg: #f4f7fb;
+    --surface: #ffffff;
+    --subtle: #f8fafc;
+    --hover: #f1f5f9;
+    --border: #cbd5e1;
+    --border-strong: #cbd5e1;
+    --heading: #172554;
+    --label: #334155;
+    --text: #1f2937;
+    --text-2: #334155;
+    --text-3: #64748b;
+    --success: #16a34a; --success-soft: #dcfce7;
+    --warning: #b45309; --warning-soft: #fef3c7;
+    --danger: #cc2c2a;  --danger-soft: #fdeceb;
+    --radius: 6px;
+    --radius-lg: 10px;
+    --input-h: 32px;
+    --cell-h: 30px;
+    --gap: 16px;
+    --shadow: 0 1px 2px rgba(15, 23, 42, .04);
+    --shadow-pop: 0 12px 32px rgba(15, 23, 42, .14);
+}
+body.compact { --input-h: 28px; --cell-h: 26px; --gap: 12px; }
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 13px;
+    color: var(--text);
+    background: var(--bg);
+    -webkit-font-smoothing: antialiased;
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+
+/* ── Buttons ───────────────────────────────────────────────── */
+.btn {
+    height: 34px; padding: 0 14px;
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    border-radius: var(--radius); border: 1px solid var(--border-strong);
+    background: var(--surface); color: var(--text); font-weight: 500;
+    cursor: pointer; white-space: nowrap; transition: background .12s, border-color .12s, color .12s;
+}
+.btn:hover { background: var(--hover); }
+.btn:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--primary-ring); }
+.btn:disabled { opacity: .45; cursor: default; background: var(--surface); }
+.btn i { font-size: 13px; color: var(--text-2); }
+.btn-primary { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 600; }
+.btn-primary i { color: #fff; }
+.btn-primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+.btn-primary .kbd { border-color: rgba(255, 255, 255, .5); }
+.btn-ghost { border-color: transparent; background: none; color: var(--text-2); }
+.btn-ghost:hover { background: var(--hover); color: var(--text); }
+.btn-outline-primary { border-color: var(--primary); color: var(--primary); font-weight: 600; }
+.btn-outline-primary i { color: var(--primary); }
+.btn-outline-primary:hover { background: var(--primary); color: #fff; }
+.btn-outline-primary:hover i { color: #fff; }
+.btn-sm { height: 30px; padding: 0 10px; font-size: 12.5px; }
+.kbd {
+    font-size: 10.5px; font-weight: 600; color: inherit; opacity: .75;
+    border: 1px solid currentColor; border-radius: 4px; padding: 0 4px; line-height: 15px;
+}
+
+/* ── App bar (replaces the 19-button toolbar) ─────────────── */
+.appbar {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(255, 255, 255, .97);
+    backdrop-filter: blur(6px);
+    border-bottom: 1px solid var(--border);
+}
+.appbar-inner {
+    max-width: 1600px; margin: 0 auto; padding: 10px 24px;
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+}
+.appbar-sep { width: 1px; height: 22px; background: var(--border); }
+.doc-title { display: flex; align-items: center; gap: 10px; min-width: 0; flex-wrap: wrap; }
+.doc-title h1 { margin: 0; font-size: 17px; font-weight: 700; letter-spacing: -.01em; color: var(--heading); }
+.doc-no { font-size: 13px; color: var(--text-3); font-weight: 500; font-variant-numeric: tabular-nums; }
+.spacer { flex: 1; }
+.appbar-actions { display: flex; align-items: center; gap: 8px; }
+
+.chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    height: 22px; padding: 0 9px; border-radius: 999px;
+    font-size: 11.5px; font-weight: 600; white-space: nowrap;
+}
+.chip::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.chip-type { background: var(--hover); color: var(--primary); }
+.chip-type::before { display: none; }
+.chip-draft { background: var(--warning-soft); color: var(--warning); }
+.chip-approved { background: var(--success-soft); color: var(--success); }
+.chip-cancelled { background: var(--danger-soft); color: var(--danger); }
+
+/* More menu */
+.menu-wrap { position: relative; }
+.menu {
+    position: absolute; right: 0; top: calc(100% + 6px); z-index: 60;
+    width: 248px; max-height: calc(100vh - 80px); overflow-y: auto;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-pop); padding: 6px; display: none;
+}
+.menu.open { display: block; }
+.menu-label {
+    padding: 6px 10px 2px; font-size: 11px; font-weight: 600; color: var(--text-3);
+    letter-spacing: .04em; text-transform: uppercase;
+}
+.menu button {
+    width: 100%; display: flex; align-items: center; gap: 10px;
+    padding: 6px 10px; border: 0; background: none; border-radius: var(--radius);
+    text-align: left; cursor: pointer; color: var(--text);
+}
+.menu button:hover, .menu button:focus-visible { background: var(--hover); outline: none; }
+.menu button:disabled { opacity: .45; cursor: default; background: none; }
+.menu button i { width: 16px; color: var(--text-3); text-align: center; }
+.menu button .kbd { margin-left: auto; color: var(--text-3); }
+.menu button .state { margin-left: auto; font-size: 11.5px; color: var(--text-3); }
+.menu hr { border: 0; border-top: 1px solid var(--border); margin: 4px 0; }
+.menu .danger, .menu .danger i { color: var(--danger); }
+.menu .danger:hover { background: var(--danger-soft); }
+
+/* ── Page layout ───────────────────────────────────────────── */
+.proto-note { max-width: 1600px; margin: 0 auto; padding: 10px 24px 0; font-size: 12px; color: var(--text-3); }
+.page {
+    display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: var(--gap);
+    padding: var(--gap) 24px 40px; max-width: 1600px; margin: 0 auto;
+}
+.surface {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); box-shadow: var(--shadow);
+}
+.main { display: flex; flex-direction: column; gap: var(--gap); min-width: 0; }
+
+/* ── Header form: whitespace between groups, no divider lines ─ */
+.form-section { padding: 18px 20px 6px; }
+.section-title { margin: 0 0 12px; font-size: 13px; font-weight: 600; color: var(--heading); }
+.grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px 16px; }
+.span-2 { grid-column: span 2; }
+.span-4 { grid-column: 1 / -1; }
+.grid.dense { grid-auto-flow: row dense; }
+.row-2 { grid-row: span 2; }
+.field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.field > label { font-size: 12px; font-weight: 500; color: var(--label); }
+.field > label .req { color: var(--text-3); margin-left: 2px; }
+.control {
+    height: var(--input-h); width: 100%; padding: 0 10px;
+    border: 1px solid var(--border-strong); border-radius: var(--radius);
+    background: var(--surface); outline: none;
+    transition: border-color .12s, box-shadow .12s;
+}
+textarea.control { height: auto; min-height: 60px; padding: 7px 10px; resize: vertical; }
+.control:hover { border-color: #94a3b8; }
+.control:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-ring); }
+.control[readonly] { background: var(--subtle); color: var(--text); }
+.control.num { text-align: right; font-variant-numeric: tabular-nums; }
+.field.invalid .control { border-color: var(--danger); box-shadow: 0 0 0 3px rgba(204, 44, 42, .1); }
+.field.invalid > label .req { color: var(--danger); }
+.field .hint { font-size: 11.5px; color: var(--danger); display: none; }
+.field.invalid .hint { display: block; }
+.input-icon { position: relative; }
+.input-icon .control { padding-right: 32px; }
+.input-icon > i, .input-icon > button {
+    position: absolute; right: 1px; top: 1px; bottom: 1px; width: 30px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text-3); background: none; border: 0; cursor: pointer;
+}
+.input-icon > button:hover { color: var(--primary); }
+.input-group { display: flex; gap: 6px; }
+.input-group .control:first-child { flex: 0 0 90px; }
+
+.party-card {
+    margin-top: 8px; padding: 10px 12px; border-radius: var(--radius);
+    background: var(--subtle);
+    display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; font-size: 12px;
+}
+.party-card .name { font-weight: 600; font-size: 13px; }
+.party-card .muted { color: var(--text-2); }
+.party-card .stat { text-align: right; color: var(--text-2); }
+.party-card .stat b { display: block; font-size: 13px; color: var(--text); font-variant-numeric: tabular-nums; }
+.party-card .stat.warn b { color: var(--warning); }
+.party-card .stat.over b { color: var(--danger); }
+
+.expander {
+    display: flex; align-items: center; gap: 8px; width: 100%;
+    margin-top: 14px; padding: 12px 20px; border: 0; border-top: 1px solid var(--border);
+    background: none; cursor: pointer; color: var(--text-2); font-weight: 500;
+}
+.expander:hover, .expander.open { color: var(--primary); }
+.expander i { transition: transform .15s; width: 12px; }
+.expander.open i { transform: rotate(90deg); }
+.expander .count { font-size: 11.5px; color: var(--text-3); font-weight: 400; }
+.more-panel { display: none; }
+.more-panel.open { display: block; }
+.tabs { display: flex; gap: 4px; padding: 0 20px; border-bottom: 1px solid var(--border); }
+.tab {
+    padding: 10px 12px; border: 0; background: none; cursor: pointer;
+    color: var(--text-2); font-weight: 500; border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+.tab-pane { display: none; padding: 16px 20px; }
+.tab-pane.active { display: block; }
+
+/* ── Items grid: fits the width, advanced fields in an expandable row ─ */
+.lines-head { display: flex; align-items: center; gap: 8px; padding: 12px 16px; }
+.lines-head h2 { margin: 0; font-size: 14px; font-weight: 600; color: var(--heading); }
+.lines-head .count { color: var(--text-3); font-weight: 500; }
+.grid-scroll { overflow-y: auto; overflow-x: hidden; max-height: 560px; border-top: 1px solid var(--border); }
+table.lines { width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 0; }
+.lines col.c-tg   { width: 52px; }
+.lines col.c-code { width: 92px; }
+.lines col.c-qty  { width: 76px; }
+.lines col.c-unit { width: 64px; }
+.lines col.c-rate { width: 92px; }
+.lines col.c-disc { width: 68px; }
+.lines col.c-vat  { width: 104px; }
+.lines col.c-tot  { width: 112px; }
+.lines col.c-act  { width: 40px; }
+.lines th {
+    position: sticky; top: 0; z-index: 2;
+    background: var(--subtle); color: var(--label);
+    font-size: 11.5px; font-weight: 600; text-align: left;
+    padding: 8px 6px; border-bottom: 1px solid var(--border); white-space: nowrap;
+}
+.lines th.r, .lines td.r { text-align: right; }
+.lines td { padding: 3px 4px; height: calc(var(--cell-h) + 7px); background: var(--surface); border-bottom: 1px solid #e2e8f0; }
+.lines tbody tr.row-main:hover td { background: var(--subtle); }
+.lines tbody tr.row-main.active td { background: var(--hover); }
+.lines tbody tr.row-main.active td:first-child { box-shadow: inset 3px 0 0 var(--primary); }
+.lines tbody tr.row-main.open td { border-bottom-color: transparent; }
+
+.row-toggle {
+    display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 6px;
+    border: 0; border-radius: var(--radius); background: none; cursor: pointer;
+    color: var(--text-3); font-size: 12px; font-variant-numeric: tabular-nums;
+}
+.row-toggle i { width: 10px; font-size: 11px; transition: transform .15s; }
+.row-toggle:hover { background: var(--hover); color: var(--text); }
+.row-main.open .row-toggle { color: var(--primary); }
+.row-main.open .row-toggle i { transform: rotate(90deg); }
+
+.cell {
+    width: 100%; height: var(--cell-h); padding: 0 6px;
+    border: 1px solid transparent; border-radius: 4px; background: transparent; outline: none;
+}
+.cell:hover { border-color: var(--border); }
+.cell:focus { border-color: var(--primary); background: #fff; box-shadow: 0 0 0 2px var(--primary-ring); }
+.cell.num { text-align: right; font-variant-numeric: tabular-nums; }
+.cell.code { font-weight: 600; color: var(--primary); }
+.ro { padding: 0 6px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ro small { color: var(--text-3); font-size: 11px; margin-right: 6px; }
+.ro.total { font-weight: 600; color: var(--text); }
+.desc {
+    display: flex; align-items: center; gap: 6px; padding: 0 6px; min-width: 0;
+    font-weight: 500; white-space: nowrap;
+}
+.desc .d { overflow: hidden; text-overflow: ellipsis; }
+.desc .placeholder { color: var(--text-3); font-weight: 400; }
+.desc .low { flex: 0 0 auto; color: var(--warning); font-size: 12px; }
+.row-del {
+    width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center;
+    border: 0; border-radius: var(--radius); background: none; color: var(--text-3); cursor: pointer;
+}
+.row-del:hover { color: var(--danger); background: var(--danger-soft); }
+
+/* advanced fields (progressive disclosure) */
+.lines tr.row-detail td { background: var(--subtle); padding: 0; }
+.lines tr.row-detail:not(.open) { display: none; }
+.adv {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px 16px;
+    padding: 10px 14px 12px 56px;
+}
+.adv .f { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.adv .f > span { font-size: 11.5px; color: var(--text-3); font-weight: 500; }
+.adv .f > b { height: 28px; display: flex; align-items: center; font-weight: 500; font-variant-numeric: tabular-nums; }
+.adv .f > b.low { color: var(--warning); }
+.adv .control { height: 28px; font-size: 12.5px; }
+
+.lines tfoot td {
+    position: sticky; bottom: 0; background: var(--subtle); border-top: 1px solid var(--border); border-bottom: 0;
+    font-weight: 600; padding: 9px 10px; font-variant-numeric: tabular-nums;
+}
+.add-row {
+    display: flex; align-items: center; gap: 8px; width: 100%;
+    padding: 9px 16px; border: 0; border-top: 1px solid var(--border);
+    background: none; color: var(--text-2); cursor: pointer; text-align: left;
+}
+.add-row:hover { background: var(--subtle); color: var(--primary); }
+.add-row .kbd { color: var(--text-3); }
+
+/* ── Side panel ────────────────────────────────────────────── */
+.aside { display: flex; flex-direction: column; gap: var(--gap); position: sticky; top: 72px; align-self: start; }
+.panel { padding: 16px; }
+.panel h3 { margin: 0 0 10px; font-size: 13px; font-weight: 600; color: var(--heading); }
+.sum-row { display: flex; justify-content: space-between; padding: 5px 0; color: var(--label); font-variant-numeric: tabular-nums; }
+.sum-row b { color: var(--text); font-weight: 500; }
+.sum-total { margin-top: 8px; padding-top: 12px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: baseline; }
+.sum-total span { font-weight: 600; }
+.sum-total b { font-size: 22px; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.sum-total small { font-size: 12px; color: var(--text-3); font-weight: 500; margin-right: 4px; }
+.words { margin-top: 6px; font-size: 11.5px; color: var(--text-3); line-height: 1.4; }
+
+.attach { display: flex; align-items: center; gap: 10px; padding: 7px 0; }
+.attach i { width: 28px; height: 28px; border-radius: var(--radius); background: var(--hover); display: flex; align-items: center; justify-content: center; color: var(--text-2); }
+.attach .n { font-weight: 500; }
+.attach .m { font-size: 11.5px; color: var(--text-3); }
+.drop { margin-top: 8px; padding: 10px; border: 1px dashed var(--border-strong); border-radius: var(--radius); text-align: center; color: var(--text-3); font-size: 12px; cursor: pointer; }
+.drop:hover { border-color: var(--primary); color: var(--primary); }
+
+/* ── Toast ─────────────────────────────────────────────────── */
+.toast {
+    position: fixed; right: 24px; bottom: 24px; z-index: 100;
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 16px; border-radius: var(--radius-lg);
+    background: var(--text); color: #fff; box-shadow: var(--shadow-pop);
+    transform: translateY(20px); opacity: 0; pointer-events: none; transition: all .2s;
+}
+.toast.show { transform: none; opacity: 1; }
+.toast i { color: #4ade80; }
+
+/* ── Responsive ────────────────────────────────────────────── */
+@media (max-width: 1280px) {
+    .page { grid-template-columns: 1fr; }
+    .aside { position: static; display: grid; grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 800px) {
+    .appbar-inner { padding: 8px 12px; gap: 8px; }
+    .appbar .doc-title { order: 5; width: 100%; }
+    .appbar .appbar-sep { display: none; }
+    .appbar .btn .lbl { display: none; }
+    .appbar .btn { padding: 0 10px; }
+    .appbar #tbSave .kbd { display: none; }
+    .proto-note { padding: 8px 12px 0; }
+    .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .aside { grid-template-columns: 1fr; }
+    .page { padding: 12px; }
+    .adv { padding-left: 14px; }
+}
+@media (max-width: 720px) {
+    /* phones only: the grid scrolls sideways instead of crushing the columns */
+    .grid-scroll { overflow-x: auto; }
+    table.lines { min-width: 660px; }
+    .lines-head .btn-expand .lbl { display: none; }
+}
+</style>
+</head>
+<body>
+
+<!-- App bar: replaces the legacy toolbar. Each action keeps its toolbar id (tbSave, tbFind …)
+     so erpToolbarAction() / erpToolbarSetState() keep working when this moves to live. -->
+<header class="appbar" id="erpToolbar">
+    <div class="appbar-inner">
+        <button type="button" class="btn btn-ghost" id="tbClose" data-action="close" title="Close and go back"><i class="fa fa-arrow-left"></i><span class="lbl">Back</span></button>
+        <span class="appbar-sep"></span>
+        <div class="doc-title">
+            <h1>Sales Invoice</h1>
+            <span class="doc-no">CRS/05145</span>
+            <span class="chip chip-type">CRS · Credit Sales</span>
+            <span class="chip chip-draft" id="statusChip">Draft</span>
+        </div>
+        <div class="spacer"></div>
+        <div class="appbar-actions">
+            <button type="button" class="btn" id="tbPreview" data-action="preview" title="Preview (available after saving)" disabled><i class="fa fa-eye"></i><span class="lbl">Preview</span></button>
+            <button type="button" class="btn" id="tbPrint" data-action="print" title="Print (Ctrl+P)"><i class="fa fa-print"></i><span class="lbl">Print</span></button>
+            <div class="menu-wrap">
+                <button type="button" class="btn" id="moreBtn" aria-haspopup="menu" aria-expanded="false" aria-controls="moreMenu" title="More actions"><i class="fa fa-ellipsis-h"></i><span class="lbl">More</span></button>
+                <div class="menu" id="moreMenu" role="menu" aria-labelledby="moreBtn">
+                    <div class="menu-label">Document</div>
+                    <button type="button" role="menuitem" id="tbNew" data-action="new"><i class="fa fa-file-o"></i>New invoice</button>
+                    <button type="button" role="menuitem" id="tbFind" data-action="find"><i class="fa fa-search"></i>Find</button>
+                    <button type="button" role="menuitem" id="tbEdit" data-action="edit"><i class="fa fa-pencil"></i>Edit</button>
+                    <button type="button" role="menuitem" id="tbSelect" data-action="select"><i class="fa fa-check-square-o"></i>Select</button>
+                    <button type="button" role="menuitem" id="tbAttach" data-action="attach"><i class="fa fa-paperclip"></i>Attach files</button>
+                    <hr>
+                    <div class="menu-label">Navigate</div>
+                    <button type="button" role="menuitem" id="tbPrior" data-action="prior"><i class="fa fa-arrow-left"></i>Previous</button>
+                    <button type="button" role="menuitem" id="tbNext" data-action="next"><i class="fa fa-arrow-right"></i>Next</button>
+                    <button type="button" role="menuitem" id="tbList" data-action="list"><i class="fa fa-list"></i>Document list</button>
+                    <button type="button" role="menuitem" id="tbHome" data-action="home"><i class="fa fa-home"></i>Home</button>
+                    <hr>
+                    <div class="menu-label">Workflow</div>
+                    <button type="button" role="menuitem" id="tbForward" data-action="forward"><i class="fa fa-share"></i>Forward for approval</button>
+                    <button type="button" role="menuitem" id="tbStatus" data-action="status"><i class="fa fa-check-circle-o"></i>Approval status</button>
+                    <button type="button" role="menuitem" id="tbRevision" data-action="revision"><i class="fa fa-history"></i>Revision history</button>
+                    <button type="button" role="menuitem" id="tbReport" data-action="report"><i class="fa fa-file-excel-o"></i>Export report</button>
+                    <hr>
+                    <button type="button" role="menuitem" id="densityBtn" data-action="density"><i class="fa fa-compress"></i>Compact view<span class="state" id="densityState">Off</span></button>
+                    <hr>
+                    <button type="button" role="menuitem" class="danger" id="tbCancel" data-action="cancel"><i class="fa fa-ban"></i>Cancel invoice</button>
+                    <button type="button" role="menuitem" class="danger" id="tbDelete" data-action="delete"><i class="fa fa-trash-o"></i>Delete</button>
+                </div>
+            </div>
+            <button type="button" class="btn btn-primary" id="tbSave" data-action="save" title="Save (Ctrl+S)"><i class="fa fa-check"></i>Save Invoice<span class="kbd">Ctrl+S</span></button>
+        </div>
+    </div>
+</header>
+
+<div class="proto-note"><i class="fa fa-info-circle"></i> Static prototype for design review — sample data, no saving.</div>
+
+<div class="page">
+    <main class="main">
+        <!-- Header form -->
+        <section class="surface">
+            <div class="form-section">
+                <h4 class="section-title">Document</h4>
+                <div class="grid">
+                    <div class="field">
+                        <label>Invoice No.</label>
+                        <input class="control" value="CRS/05145" readonly>
+                    </div>
+                    <div class="field">
+                        <label>Invoice Date<span class="req">*</span></label>
+                        <input class="control" type="date" value="2026-10-07">
+                    </div>
+                    <div class="field">
+                        <label>Pay Method<span class="req">*</span></label>
+                        <select class="control"><option>Credit</option><option>Cash</option></select>
+                    </div>
+                    <div class="field">
+                        <label>Sales Type<span class="req">*</span></label>
+                        <select class="control"><option>Local</option><option>Export</option></select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h4 class="section-title">Customer</h4>
+                <div class="grid dense">
+                    <div class="field span-2 row-2" id="custField">
+                        <label>Customer<span class="req">*</span></label>
+                        <div class="input-icon">
+                            <input class="control" id="custInput" value="00164 · L Z GENERAL TRADING LLC (EXPORT)" placeholder="Search by code or name (F2)">
+                            <button type="button" title="Lookup (F2)"><i class="fa fa-search"></i></button>
+                        </div>
+                        <span class="hint">Customer is required.</span>
+                        <div class="party-card" id="partyCard">
+                            <div>
+                                <div class="name">L Z GENERAL TRADING LLC</div>
+                                <div class="muted">Al Quoz Industrial 3, Dubai · TRN 100234567800003</div>
+                            </div>
+                            <div class="stat">Credit limit<b>250,000.00</b></div>
+                            <div class="muted">Payment terms: 60 days</div>
+                            <div class="stat warn">Outstanding<b>184,920.50</b></div>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label>Contact Name</label>
+                        <input class="control" value="FIRDOS">
+                    </div>
+                    <div class="field">
+                        <label>Mobile</label>
+                        <div class="input-icon">
+                            <input class="control" value="0565571111">
+                            <i class="fa fa-phone"></i>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label>Email</label>
+                        <input class="control" type="email" placeholder="name@company.com">
+                    </div>
+                    <div class="field">
+                        <label>Telephone</label>
+                        <input class="control" value="04 2252201">
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h4 class="section-title">Sales</h4>
+                <div class="grid">
+                    <div class="field">
+                        <label>Salesman</label>
+                        <div class="input-icon">
+                            <input class="control" value="JERO">
+                            <button type="button"><i class="fa fa-search"></i></button>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label>Currency<span class="req">*</span></label>
+                        <div class="input-group">
+                            <select class="control"><option>AED</option><option>USD</option></select>
+                            <input class="control num" value="1.000000" readonly>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label>PO No.</label>
+                        <input class="control" placeholder="Customer PO">
+                    </div>
+                    <div class="field">
+                        <label>PO Date</label>
+                        <input class="control" type="date">
+                    </div>
+                    <div class="field span-4">
+                        <label>Narration</label>
+                        <input class="control" value="SALES INVOICE">
+                    </div>
+                </div>
+            </div>
+
+            <button class="expander" id="moreToggle" type="button">
+                <i class="fa fa-chevron-right"></i> More details
+                <span class="count">Delivery · Terms · References · Notes</span>
+            </button>
+            <div class="more-panel" id="morePanel">
+                <div class="tabs">
+                    <button class="tab active" data-tab="t-delivery">Delivery</button>
+                    <button class="tab" data-tab="t-terms">Terms</button>
+                    <button class="tab" data-tab="t-refs">References</button>
+                    <button class="tab" data-tab="t-notes">Notes</button>
+                </div>
+                <div class="tab-pane active" id="t-delivery">
+                    <div class="grid">
+                        <div class="field"><label>Driver</label><select class="control"><option>Select</option></select></div>
+                        <div class="field"><label>Vehicle No.</label><select class="control"><option>Select</option></select></div>
+                        <div class="field"><label>Delivery Date</label><input class="control" type="date"></div>
+                        <div class="field"><label>Delivery Place</label><input class="control"></div>
+                        <div class="field span-4"><label>Delivery Address</label><textarea class="control"></textarea></div>
+                    </div>
+                </div>
+                <div class="tab-pane" id="t-terms">
+                    <div class="grid">
+                        <div class="field"><label>Credit Days</label><input class="control num" value="60"></div>
+                        <div class="field span-2"><label>Payment Terms</label><input class="control"></div>
+                        <div class="field"><label>Bank</label><select class="control"><option>-- Select --</option></select></div>
+                        <div class="field span-4"><label>Delivery Terms</label><textarea class="control"></textarea></div>
+                    </div>
+                </div>
+                <div class="tab-pane" id="t-refs">
+                    <div class="grid">
+                        <div class="field"><label>QTN No.</label><input class="control"></div>
+                        <div class="field"><label>QTN Date</label><input class="control" type="date"></div>
+                        <div class="field"><label>D.O. No.</label><input class="control"></div>
+                        <div class="field"><label>D.O. Date</label><input class="control" type="date"></div>
+                        <div class="field span-2"><label>Subject</label><input class="control"></div>
+                        <div class="field span-2"><label>Project</label><input class="control"></div>
+                    </div>
+                </div>
+                <div class="tab-pane" id="t-notes">
+                    <div class="grid">
+                        <div class="field span-4"><label>Remark</label><textarea class="control"></textarea></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Items -->
+        <section class="surface">
+            <div class="lines-head">
+                <h2>Items <span class="count" id="lineCount"></span></h2>
+                <div class="spacer"></div>
+                <button type="button" class="btn btn-ghost btn-sm btn-expand" id="expandAll" title="Show / hide the details of every line"><i class="fa fa-angle-double-down"></i><span class="lbl">Expand all</span></button>
+                <button type="button" class="btn btn-outline-primary btn-sm" id="addItemTop"><i class="fa fa-plus"></i>Add item</button>
+            </div>
+            <div class="grid-scroll">
+                <table class="lines" id="lines">
+                    <colgroup>
+                        <col class="c-tg"><col class="c-code"><col class="c-desc"><col class="c-qty"><col class="c-unit">
+                        <col class="c-rate"><col class="c-disc"><col class="c-vat"><col class="c-tot"><col class="c-act">
+                    </colgroup>
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Item Code</th>
+                            <th>Description</th>
+                            <th class="r">Qty</th>
+                            <th>Unit</th>
+                            <th class="r">Rate</th>
+                            <th class="r">Disc %</th>
+                            <th class="r">VAT</th>
+                            <th class="r">Total</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="lineBody"></tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="3">Total</td>
+                            <td class="r" id="ftQty"></td>
+                            <td colspan="2"></td>
+                            <td class="r" id="ftDisc"></td>
+                            <td class="r" id="ftVat"></td>
+                            <td class="r" id="ftTot"></td>
+                            <td></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+            <button class="add-row" id="addRow" type="button"><i class="fa fa-plus"></i> Add line <span class="kbd">↓ on last row</span></button>
+        </section>
+    </main>
+
+    <!-- Side panel -->
+    <aside class="aside">
+        <section class="surface panel">
+            <h3>Summary</h3>
+            <div class="sum-row">Subtotal <b id="sSub"></b></div>
+            <div class="sum-row">Discount <b id="sDisc"></b></div>
+            <div class="sum-row">Excise <b id="sExc"></b></div>
+            <div class="sum-row">VAT (5%) <b id="sVat"></b></div>
+            <div class="sum-total"><span>Total</span><b><small>AED</small><span id="sTot"></span></b></div>
+            <div class="words" id="sItems"></div>
+        </section>
+
+        <section class="surface panel">
+            <h3>Attachments</h3>
+            <div class="attach"><i class="fa fa-file-pdf-o"></i><div><div class="n">Customer_PO_8821.pdf</div><div class="m">214 KB · SANTHILAL</div></div></div>
+            <div class="drop"><i class="fa fa-cloud-upload"></i> Drop files or click to attach</div>
+        </section>
+    </aside>
+</div>
+
+<div class="toast" id="toast"><i class="fa fa-check-circle"></i> <span id="toastMsg">Saved</span></div>
+
+<script>
+(function () {
+    // loc / stock / excise / ac are the advanced fields shown in each line's details row
+    var lines = [
+        { code: '10250', desc: 'BOOM-BOOM 24X250ML CANS',  stock: 80154, loc: 'BV', unit: 'PCS', qty: 1368, rate: 87.89, disc: 0, excise: 0, vat: 5, ac: '41010' },
+        { code: '10252', desc: 'BOOM-BOOM 24X330ML GLASS', stock: 9608,  loc: 'BV', unit: 'PCS', qty: 14,   rate: 99.47, disc: 0, excise: 0, vat: 5, ac: '41010' },
+        { code: '30355', desc: 'B-COLA 30X250ML CANS',     stock: 1487,  loc: 'BV', unit: 'PCS', qty: 1487, rate: 24.41, disc: 0, excise: 0, vat: 5, ac: '41010' },
+        { code: '40455', desc: 'FIZZY WIZZY 30X250ML CANS', stock: 20,   loc: 'BV', unit: 'PCS', qty: 20,   rate: 24.41, disc: 2, excise: 0, vat: 5, ac: '41010' },
+        { code: '88011', desc: 'DANDANAH POMEGRANATE JUICE 24X355ML', stock: 239, loc: 'BV', unit: 'PCS', qty: 114, rate: 36.78, disc: 0, excise: 0, vat: 5, ac: '41010' }
+    ];
+    var body = document.getElementById('lineBody');
+    var fmt = function (n) { return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
+    var editable = ['code', 'qty', 'unit', 'rate', 'disc'];
+    var textKeys = ['code', 'unit'];
+
+    // same rule as the live invoice: excise is added before VAT
+    function calc(l) {
+        var gross = l.qty * l.rate;
+        var discAmt = gross * (l.disc || 0) / 100;
+        var excAmt = l.qty * (l.excise || 0);
+        var amt = gross - discAmt + excAmt;
+        var vat = amt * (l.vat || 0) / 100;
+        return { gross: gross, discAmt: discAmt, excAmt: excAmt, amt: amt, vat: vat, total: amt + vat };
+    }
+
+    function rowHtml(l, i) {
+        var c = calc(l);
+        var low = l.stock !== '' && l.qty > l.stock;
+        var open = l._open ? ' open' : '';
+        return '<tr class="row-main' + open + '" data-i="' + i + '">'
+            + '<td><button type="button" class="row-toggle" title="Show / hide line details" aria-expanded="' + !!l._open + '"><i class="fa fa-chevron-right"></i>' + (i + 1) + '</button></td>'
+            + '<td><input class="cell code" data-k="code" value="' + l.code + '" placeholder="F2"></td>'
+            + '<td><div class="desc">' + (l.desc
+                ? '<span class="d" title="' + l.desc + '">' + l.desc + '</span>' + (low ? '<i class="fa fa-exclamation-triangle low" title="Qty is more than stock (' + Number(l.stock).toLocaleString() + ')"></i>' : '')
+                : '<span class="placeholder">Select an item…</span>') + '</div></td>'
+            + '<td><input class="cell num" data-k="qty" value="' + l.qty + '"></td>'
+            + '<td><input class="cell" data-k="unit" value="' + l.unit + '"></td>'
+            + '<td><input class="cell num" data-k="rate" value="' + l.rate.toFixed(2) + '"></td>'
+            + '<td><input class="cell num" data-k="disc" value="' + l.disc + '"></td>'
+            + '<td class="r"><div class="ro"><small>' + l.vat + '%</small>' + fmt(c.vat) + '</div></td>'
+            + '<td class="r"><div class="ro total">' + fmt(c.total) + '</div></td>'
+            + '<td><button type="button" class="row-del" title="Delete line" tabindex="-1"><i class="fa fa-trash-o"></i></button></td>'
+            + '</tr>'
+            + '<tr class="row-detail' + open + '" data-i="' + i + '"><td colspan="10"><div class="adv">'
+            +   '<div class="f"><span>Location</span><b>' + (l.loc || '—') + '</b></div>'
+            +   '<div class="f"><span>Stock</span><b class="' + (low ? 'low' : '') + '">' + (l.stock === '' ? '—' : Number(l.stock).toLocaleString() + ' ' + l.unit) + '</b></div>'
+            +   '<label class="f"><span>Excise rate / unit</span><input class="control num" data-k="excise" value="' + (l.excise || 0) + '"></label>'
+            +   '<div class="f"><span>Excise amount</span><b>' + fmt(c.excAmt) + '</b></div>'
+            +   '<div class="f"><span>Discount amount</span><b>' + fmt(c.discAmt) + '</b></div>'
+            +   '<div class="f"><span>Amount (excl. VAT)</span><b>' + fmt(c.amt) + '</b></div>'
+            +   '<div class="f"><span>A/C code</span><b>' + (l.ac || '—') + '</b></div>'
+            + '</div></td></tr>';
+    }
+
+    function render(focus) {
+        body.innerHTML = lines.map(rowHtml).join('');
+        totals();
+        if (focus) {
+            var el = body.querySelector('tr[data-i="' + focus.i + '"] [data-k="' + focus.k + '"]');
+            if (el) { el.focus(); if (el.select) el.select(); }
+        }
+    }
+
+    function totals() {
+        var qty = 0, gross = 0, disc = 0, exc = 0, amt = 0, vat = 0;
+        lines.forEach(function (l) { var c = calc(l); qty += +l.qty || 0; gross += c.gross; disc += c.discAmt; exc += c.excAmt; amt += c.amt; vat += c.vat; });
+        document.getElementById('ftQty').textContent = qty.toLocaleString();
+        document.getElementById('ftDisc').textContent = disc ? fmt(disc) : '';
+        document.getElementById('ftVat').textContent = fmt(vat);
+        document.getElementById('ftTot').textContent = fmt(amt + vat);
+        document.getElementById('sSub').textContent = fmt(gross);
+        document.getElementById('sDisc').textContent = disc ? '− ' + fmt(disc) : '0.00';
+        document.getElementById('sExc').textContent = fmt(exc);
+        document.getElementById('sVat').textContent = fmt(vat);
+        document.getElementById('sTot').textContent = fmt(amt + vat);
+        document.getElementById('lineCount').textContent = '· ' + lines.length + ' lines';
+        document.getElementById('sItems').textContent = lines.length + ' lines · ' + qty.toLocaleString() + ' units';
+        var allOpen = lines.length && lines.every(function (l) { return l._open; });
+        var ex = document.getElementById('expandAll');
+        ex.querySelector('.lbl').textContent = allOpen ? 'Collapse all' : 'Expand all';
+        ex.querySelector('i').className = allOpen ? 'fa fa-angle-double-up' : 'fa fa-angle-double-down';
+    }
+
+    function addLine(focusIt) {
+        lines.push({ code: '', desc: '', stock: '', loc: 'BV', unit: 'PCS', qty: 0, rate: 0, disc: 0, excise: 0, vat: 5, ac: '' });
+        render(focusIt ? { i: lines.length - 1, k: 'code' } : null);
+    }
+
+    body.addEventListener('change', function (e) {
+        var k = e.target.dataset.k; if (!k) return;
+        var i = +e.target.closest('tr').dataset.i;
+        lines[i][k] = textKeys.indexOf(k) >= 0 ? e.target.value : parseFloat(e.target.value) || 0;
+        if (k === 'code' && e.target.value && !lines[i].desc) { lines[i].desc = 'SAMPLE ITEM ' + e.target.value; lines[i].stock = 500; lines[i].rate = 25; lines[i].ac = '41010'; }
+        render({ i: i, k: k });
+    });
+
+    body.addEventListener('focusin', function (e) {
+        body.querySelectorAll('tr.active').forEach(function (r) { r.classList.remove('active'); });
+        var tr = e.target.closest('tr'); if (!tr) return;
+        var main = body.querySelector('tr.row-main[data-i="' + tr.dataset.i + '"]');
+        if (main) main.classList.add('active');
+    });
+
+    body.addEventListener('click', function (e) {
+        var tg = e.target.closest('.row-toggle');
+        if (tg) {
+            var l = lines[+tg.closest('tr').dataset.i];
+            l._open = !l._open;
+            render();
+            return;
+        }
+        var del = e.target.closest('.row-del'); if (!del) return;
+        lines.splice(+del.closest('tr').dataset.i, 1);
+        render();
+    });
+
+    body.addEventListener('keydown', function (e) {
+        var k = e.target.dataset.k; if (!k) return;
+        var i = +e.target.closest('tr').dataset.i;
+        var col = editable.indexOf(k);
+        if (col < 0) {
+            if (e.key === 'Enter') { e.preventDefault(); e.target.dispatchEvent(new Event('change', { bubbles: true })); }
+            return;
+        }
+        if (e.key === 'ArrowDown' || (e.key === 'Enter' && !e.shiftKey)) {
+            e.preventDefault();
+            e.target.dispatchEvent(new Event('change', { bubbles: true }));
+            if (i === lines.length - 1) addLine(true);
+            else render({ i: i + 1, k: e.key === 'Enter' ? 'code' : k });
+        } else if (e.key === 'ArrowUp' && i > 0) {
+            e.preventDefault(); render({ i: i - 1, k: k });
+        } else if (e.key === 'ArrowRight' && e.target.selectionStart === e.target.value.length && col < editable.length - 1) {
+            e.preventDefault(); body.querySelector('tr[data-i="' + i + '"] [data-k="' + editable[col + 1] + '"]').focus();
+        } else if (e.key === 'ArrowLeft' && e.target.selectionStart === 0 && col > 0) {
+            e.preventDefault(); body.querySelector('tr[data-i="' + i + '"] [data-k="' + editable[col - 1] + '"]').focus();
+        }
+    });
+
+    document.getElementById('addRow').onclick = function () { addLine(true); };
+    document.getElementById('addItemTop').onclick = function () { addLine(true); };
+    document.getElementById('expandAll').onclick = function () {
+        var open = !lines.every(function (l) { return l._open; });
+        lines.forEach(function (l) { l._open = open; });
+        render();
+    };
+
+    var moreToggle = document.getElementById('moreToggle');
+    moreToggle.onclick = function () {
+        moreToggle.classList.toggle('open');
+        document.getElementById('morePanel').classList.toggle('open');
+    };
+    document.querySelectorAll('.tab').forEach(function (t) {
+        t.onclick = function () {
+            document.querySelectorAll('.tab, .tab-pane').forEach(function (x) { x.classList.remove('active'); });
+            t.classList.add('active');
+            document.getElementById(t.dataset.tab).classList.add('active');
+        };
+    });
+
+    // ── More menu ──
+    var moreBtn = document.getElementById('moreBtn');
+    var moreMenu = document.getElementById('moreMenu');
+    function setMenu(open) {
+        moreMenu.classList.toggle('open', open);
+        moreBtn.setAttribute('aria-expanded', open);
+        if (open) { var first = moreMenu.querySelector('button:not(:disabled)'); if (first) first.focus(); }
+    }
+    moreBtn.addEventListener('click', function (e) { e.stopPropagation(); setMenu(!moreMenu.classList.contains('open')); });
+    document.addEventListener('click', function (e) { if (!e.target.closest('.menu-wrap')) setMenu(false); });
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && moreMenu.classList.contains('open')) { setMenu(false); moreBtn.focus(); }
+    });
+    moreMenu.addEventListener('keydown', function (e) {
+        if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+        e.preventDefault();
+        var items = Array.prototype.slice.call(moreMenu.querySelectorAll('button:not(:disabled)'));
+        var at = items.indexOf(document.activeElement);
+        items[(at + (e.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length].focus();
+    });
+
+    function toggleDensity() {
+        var on = document.body.classList.toggle('compact');
+        document.getElementById('densityState').textContent = on ? 'On' : 'Off';
+    }
+
+    var toastTimer;
+    function toast(msg) {
+        var t = document.getElementById('toast');
+        document.getElementById('toastMsg').textContent = msg;
+        t.classList.add('show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(function () { t.classList.remove('show'); }, 2200);
+    }
+
+    function validate() {
+        var f = document.getElementById('custField');
+        var ok = document.getElementById('custInput').value.trim() !== '';
+        f.classList.toggle('invalid', !ok);
+        document.getElementById('partyCard').style.display = ok ? '' : 'none';
+        return ok;
+    }
+    document.getElementById('custInput').addEventListener('input', validate);
+
+    function save() { if (validate()) toast('Invoice CRS/05145 saved'); }
+
+    // one dispatcher for every action (live: erpToolbarAction(action))
+    document.querySelectorAll('#erpToolbar [data-action]').forEach(function (b) {
+        b.addEventListener('click', function () {
+            setMenu(false);
+            var action = b.dataset.action;
+            if (action === 'save') { save(); return; }
+            if (action === 'density') { toggleDensity(); return; }
+            toast(b.textContent.replace(/Off|On|Ctrl\+S/g, '').trim() + ' — prototype only');
+        });
+    });
+    document.addEventListener('keydown', function (e) {
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); save(); }
+    });
+
+    render();
+})();
+</script>
+</body>
+</html>

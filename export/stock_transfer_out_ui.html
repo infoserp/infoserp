@@ -1,0 +1,1278 @@
+<!DOCTYPE html>
+<!--
+  Stock Transfer Out — header + detail window (fields and design only)
+  Standalone extract of:
+    modules/stock_transfer_out/header/d_stock_transfer_out_h_01.php
+    modules/stock_transfer_out/detail/d_stock_transfer_out_d_01.php
+    assets/css/erp_document.css, assets/css/erp_search.css, material_request.css (rules used by this screen)
+  Server data (doc types, locations, units, items, saved lines) is replaced by the DEMO_* constants at the
+  bottom of the file; swap them for your own API calls.
+-->
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Transfer Out (TO)</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <style>
+        /* ════════════════════════════ Tokens ════════════════════════════ */
+        :root {
+            --primary: #4a6cd4;
+            --primary-hover: #3a59b8;
+            --primary-soft: #f1f3f5;
+            --primary-ring: rgba(74, 108, 212, .18);
+            --accent: #cc2c2a;
+            --accent-hover: #a8221f;
+            --accent-soft: #fdeceb;
+            --bg: #f8fafc;
+            --surface: #ffffff;
+            --border: #e2e8f0;
+            --border-strong: #cbd5e1;
+            --text: #0f172a;
+            --text-2: #475569;
+            --text-3: #94a3b8;
+            --success: #16a34a; --success-soft: #dcfce7;
+            --warning: #d97706; --warning-soft: #fef3c7;
+            --danger: #cc2c2a;  --danger-soft: #fdeceb;
+            --radius: 6px;
+            --radius-lg: 10px;
+            --input-h: 32px;
+            --cell-h: 28px;
+            --gap: 14px;
+            --shadow: 0 1px 2px rgba(15, 23, 42, .06), 0 1px 3px rgba(15, 23, 42, .04);
+        }
+
+        /* ════════════════════════════ Page base ════════════════════════════ */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html body {
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+            font-size: 13px;
+            padding: 12px 16px 24px;
+            -webkit-font-smoothing: antialiased;
+        }
+        html .container-fluid { padding-left: 0; padding-right: 0; }
+        .mr-container {
+            background: transparent;
+            border: none;
+            padding: 0;
+            margin: 0 auto;
+            max-width: 1600px;
+        }
+
+        /* ════════════════════════════ Page grid (header + lines | side panel) ════════════════════════════ */
+        .doc-contents { display: contents; }
+        .doc-page {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 300px;
+            column-gap: var(--gap);
+            align-items: start;
+        }
+        .doc-page > *,
+        .doc-page .doc-contents > * { grid-column: 1; min-width: 0; }
+        .doc-page .doc-titlebar { grid-column: 1 / -1; grid-row: 1; }
+        .doc-page .doc-page-aside {
+            grid-column: 2;
+            grid-row: 2 / span 6;
+            position: sticky;
+            top: 72px;
+            display: flex;
+            flex-direction: column;
+            gap: var(--gap);
+            margin-bottom: var(--gap);
+        }
+
+        /* ════════════════════════════ Title bar ════════════════════════════ */
+        .mr-header.doc-titlebar {
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            gap: 10px;
+            flex-wrap: wrap;
+            padding: 10px 16px;
+            margin-bottom: var(--gap);
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow);
+        }
+        .doc-title-text {
+            margin: 0;
+            font-size: 17px;
+            font-weight: 700;
+            letter-spacing: -.01em;
+            color: var(--primary);
+        }
+        .mr-title-wrapper { position: relative; display: inline-block; margin-right: 0; }
+        .doc-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            height: 24px;
+            padding: 0 10px;
+            border: none;
+            border-radius: 999px;
+            font-family: inherit;
+            font-size: 11.5px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        .doc-chip-type { background: var(--primary); color: #fff; cursor: pointer; }
+        .doc-chip-type:hover { background: var(--primary-hover); }
+        .doc-chip-type:focus { outline: none; }
+        .doc-chip-type i { font-size: 11px; }
+        .doc-title-spacer { flex: 1 1 auto; }
+
+        /* document type dropdown (opens under the type chip) */
+        .mr-doctype-menu {
+            display: none;
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            z-index: 9999;
+            min-width: 280px;
+            padding: 6px;
+            overflow: hidden;
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            box-shadow: 0 10px 30px rgba(15, 23, 42, .12);
+        }
+        .mr-doctype-menu.open { display: block; }
+        .mr-doctype-item {
+            padding: 8px 12px;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text);
+            background: #fff;
+            border: none;
+            border-radius: var(--radius);
+            cursor: pointer;
+            transition: background .15s, color .15s;
+        }
+        .mr-doctype-item:hover { background: #f1f5f9; color: var(--text); }
+        .mr-doctype-item.active { background: var(--primary-soft); color: var(--primary); font-weight: 600; }
+
+        /* entered / modified */
+        .mr-info {
+            font-size: 11.5px;
+            line-height: 1.5;
+            color: var(--text-3);
+            text-align: right;
+        }
+        .mr-info strong { color: var(--text-2); font-weight: 600; }
+
+        /* ════════════════════════════ Header window ════════════════════════════ */
+        .doc-form-wrap {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow);
+            margin-bottom: var(--gap);
+        }
+        .doc-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; }
+        .doc-layout.no-aside { grid-template-columns: minmax(0, 1fr); }
+        .doc-main { min-width: 0; }
+
+        .doc-section { padding: 14px 20px 16px; }
+        .doc-section + .doc-section { border-top: 1px solid var(--border); }
+        .doc-section-title {
+            margin: 0 0 10px;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: .06em;
+            text-transform: uppercase;
+            color: var(--primary);
+        }
+
+        .doc-fields {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 10px 16px;
+            grid-auto-flow: row dense;
+        }
+        .doc-fields.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .doc-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+        .doc-field.span-2 { grid-column: span 2; }
+
+        .doc-lbl {
+            display: block;
+            margin: 0;
+            font-size: 12px;
+            font-weight: 500;
+            color: #334155;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .doc-inp {
+            width: 100%;
+            height: var(--input-h);
+            min-width: 0;
+            padding: 0 10px;
+            font-family: inherit;
+            font-size: 13px;
+            color: var(--text);
+            background: var(--surface);
+            border: 1px solid var(--border-strong);
+            border-radius: var(--radius);
+            outline: none;
+            transition: border-color .12s, box-shadow .12s;
+        }
+        .doc-inp:hover { border-color: #94a3b8; }
+        .doc-inp:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-ring); }
+        .doc-inp[readonly],
+        .doc-inp:disabled { background: var(--bg); color: var(--text-2); opacity: 1; }
+        .doc-inp[readonly]:hover,
+        .doc-inp:disabled:hover { border-color: var(--border-strong); }
+        select.doc-inp { padding-right: 6px; cursor: pointer; }
+        select.doc-inp:disabled { cursor: default; }
+        textarea.doc-inp {
+            height: auto;
+            min-height: var(--input-h);
+            padding: 6px 10px;
+            line-height: 1.45;
+            resize: none;
+            overflow: hidden;
+        }
+
+        /* ── side panel (Summary + Attachments) ── */
+        .doc-panel {
+            padding: 14px 18px 16px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow);
+        }
+        .doc-sum-line {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 0;
+            font-size: 12.5px;
+            color: #334155;
+        }
+        .doc-sum-line b { font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
+        .doc-attach-empty {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 4px 0;
+            font-size: 12.5px;
+            color: var(--text-3);
+        }
+        .doc-drop {
+            display: block;
+            width: 100%;
+            margin-top: 8px;
+            padding: 10px;
+            font-family: inherit;
+            font-size: 12px;
+            color: var(--text-3);
+            text-align: center;
+            background: transparent;
+            border: 1px dashed var(--border-strong);
+            border-radius: var(--radius);
+            cursor: pointer;
+        }
+        .doc-drop:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+        .doc-drop:focus { outline: none; }
+
+        /* ── Save button under the lines (hidden; the toolbar Save clicks it) ── */
+        .doc-actionbar { display: flex; justify-content: flex-end; gap: 8px; margin-bottom: var(--gap); }
+        .doc-actionbar .detail-btn { height: 34px; padding: 0 18px; text-decoration: none; }
+
+        /* ════════════════════════════ Detail window ════════════════════════════ */
+        .detail-container {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow);
+            overflow: hidden;
+            margin-bottom: var(--gap);
+        }
+        .detail-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            padding: 12px 16px;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+        }
+        .detail-header h2 { margin: 0; font-size: 14px; font-weight: 600; color: var(--primary); }
+
+        .detail-toolbar {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            padding: 8px 16px;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+        }
+        .detail-toolbar.detail-toolbar-bottom {
+            justify-content: space-between;
+            padding: 6px 10px;
+            border-top: 1px solid var(--border);
+            border-bottom: none;
+        }
+
+        .detail-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            height: 30px;
+            padding: 0 12px;
+            font-family: inherit;
+            font-size: 12.5px;
+            font-weight: 500;
+            border: 1px solid transparent;
+            border-radius: var(--radius);
+            cursor: pointer;
+            white-space: nowrap;
+            transition: background .15s, border-color .15s, color .15s;
+        }
+        .detail-btn-primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+        .detail-btn-primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+        .detail-btn:disabled,
+        .detail-btn:disabled:hover { opacity: .45; cursor: default; }
+        .detail-btn-link { background: transparent; border-color: transparent; color: var(--primary); font-weight: 600; }
+        .detail-btn-link:hover { background: var(--primary-soft); }
+        .detail-btn-link:disabled:hover { background: transparent; }
+        .detail-btn-link i { color: var(--accent); }
+
+        .detail-table-wrapper {
+            overflow-x: auto;
+            padding: 0;
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior-x: contain;
+        }
+        .detail-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            font-size: 12.5px;
+        }
+        .detail-table thead { position: sticky; top: 0; z-index: 10; }
+        .detail-table thead th {
+            padding: 8px 6px;
+            background: var(--primary);
+            color: #fff;
+            font-size: 11.5px;
+            font-weight: 600;
+            text-align: left;
+            white-space: nowrap;
+            border-bottom: 1px solid var(--primary);
+            border-right: 1px solid rgba(255, 255, 255, .15);
+        }
+        .detail-table thead th:last-child { border-right: none; }
+
+        .detail-table tbody td {
+            padding: 4px 2px;
+            vertical-align: middle;
+            background: var(--surface);
+            border-bottom: 1px solid #f1f5f9;
+            border-right: 1px solid #f8fafc;
+            transition: background-color .12s;
+        }
+        .detail-table tbody td:last-child { border-right: none; }
+        .detail-table tbody tr.detail-row td { background: var(--surface); }
+        .detail-table tbody tr:hover td,
+        .detail-table tbody tr.detail-row:hover td { background: #f8f9fa; }
+
+        /* line inputs (selectors kept as in erp_document.css: their specificity decides which states apply) */
+        .detail-table td > input:not([type="hidden"]):not([type="checkbox"]):not(.detail-input),
+        .detail-table td > select:not(.detail-input) {
+            width: 100%;
+            height: var(--cell-h);
+            padding: 0 5px;
+            font-family: inherit;
+            font-size: 12px;
+            color: var(--text);
+            background-color: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            box-shadow: none;
+            transition: border-color .12s, box-shadow .12s;
+        }
+        .detail-table td > input:hover,
+        .detail-table td > select:hover { border-color: var(--border-strong); }
+        .detail-table td > input:focus,
+        .detail-table td > select:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 2px var(--primary-ring);
+        }
+        .detail-table td > input[readonly],
+        .detail-table td > select:disabled {
+            padding: 0 2px;
+            background-color: transparent;
+            border-color: transparent;
+            color: var(--text-2);
+        }
+        .detail-table td > input[readonly]:hover { border-color: transparent; }
+        /* plain read-only cells; the click-to-select Item Code (has a placeholder) keeps its box */
+        .detail-table td > input[readonly]:not([type="hidden"]):not(.detail-input):not([placeholder]) {
+            padding: 0 2px;
+            background-color: transparent;
+            border-color: transparent;
+        }
+
+        /* No column */
+        .detail-table td.srl-col {
+            width: 30px;
+            text-align: center;
+            font-weight: 500;
+            font-size: 12px;
+            color: var(--text-3) !important;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* Stock column */
+        .detail-table input.stock-input { color: var(--danger); font-weight: 700; }
+
+        /* delete button: shows on row hover (always on touch screens) */
+        .detail-table button {
+            padding: 4px 8px;
+            font-size: 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background .15s, color .15s;
+        }
+        .detail-table .btn-outline-danger { background: transparent; color: var(--text-3); border: none; }
+        .detail-table .btn-outline-danger:hover { background: var(--danger-soft); color: var(--danger); }
+        .detail-table td.line-del .btn { opacity: 0; color: var(--danger); transition: opacity .12s; }
+        .detail-table tr:hover td.line-del .btn,
+        .detail-table td.line-del .btn:focus { opacity: 1; }
+        .detail-table td.line-del .btn:disabled { visibility: hidden; }
+        @media (hover: none) {
+            .detail-table td.line-del .btn { opacity: 1; }
+        }
+
+        /* ════════════════════════════ Item search window ════════════════════════════ */
+        .popup-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1000;
+            display: none;
+            justify-content: center;
+            align-items: center;
+        }
+        .erp-search {
+            position: fixed;
+            inset: 0;
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            background: rgba(15, 23, 42, .45);
+        }
+        .erp-search-dialog {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            max-width: 720px;
+            height: min(620px, 88vh);
+            font-family: inherit;
+            color: var(--text);
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            box-shadow: 0 12px 32px rgba(15, 23, 42, .18);
+            overflow: hidden;
+        }
+        .erp-search-dialog.lg { max-width: 900px; }
+        .erp-search-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+        }
+        .erp-search-title { margin: 0; font-size: 15px; font-weight: 600; line-height: 1.3; color: var(--text); }
+        .erp-search-title > i { margin-right: 6px; color: var(--primary); }
+        .erp-search-close {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex: 0 0 auto;
+            width: 30px;
+            height: 30px;
+            padding: 0;
+            color: var(--text-2);
+            background: transparent;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            cursor: pointer;
+            transition: background-color .12s, color .12s, border-color .12s;
+        }
+        .erp-search-close:hover { color: var(--text); background: var(--bg); border-color: var(--border-strong); }
+        .erp-search-bar { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 16px; }
+        .erp-search-input { position: relative; flex: 1 1 260px; min-width: 0; }
+        .erp-search-input > i {
+            position: absolute;
+            left: 11px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 13px;
+            color: var(--primary);
+            pointer-events: none;
+        }
+        .erp-search-input input {
+            width: 100%;
+            height: 34px;
+            margin: 0;
+            padding: 0 12px 0 32px;
+            font-family: inherit;
+            font-size: 13px;
+            color: var(--text);
+            background: var(--surface);
+            border: 1px solid var(--border-strong);
+            border-radius: var(--radius);
+            transition: border-color .12s, box-shadow .12s;
+        }
+        .erp-search-input input::placeholder { color: var(--text-3); }
+        .erp-search-input input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px var(--primary-ring);
+        }
+        .erp-search-body {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow: auto;
+            margin: 0 16px 16px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+        }
+        .erp-search-table {
+            width: 100%;
+            margin: 0;
+            border-collapse: separate;
+            border-spacing: 0;
+            font-size: 13px;
+            color: var(--text);
+        }
+        .erp-search-table thead th {
+            position: sticky;
+            top: 0;
+            z-index: 1;
+            padding: 8px 12px;
+            font-size: 12px;
+            font-weight: 600;
+            text-align: left;
+            white-space: nowrap;
+            color: var(--text-2);
+            background: var(--bg);
+            border-bottom: 1px solid var(--border);
+        }
+        .erp-search-table tbody td { padding: 8px 12px; vertical-align: middle; border-bottom: 1px solid #f1f5f9; }
+        .erp-search-table tbody tr:last-child td { border-bottom: none; }
+        .erp-search-table tbody tr:hover { background: var(--bg); }
+        .erp-search-table tbody td:first-child { font-weight: 600; }
+        .erp-search-table tbody td[colspan] { font-weight: 400; color: var(--text-3); }
+        .erp-search .erp-search-table .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            height: 28px;
+            padding: 0 12px;
+            font-family: inherit;
+            font-size: 12.5px;
+            font-weight: 500;
+            line-height: 1;
+            white-space: nowrap;
+            color: var(--primary);
+            background: var(--surface);
+            border: 1px solid var(--primary);
+            border-radius: var(--radius);
+            box-shadow: none;
+            cursor: pointer;
+            transition: background-color .12s, color .12s;
+        }
+        .erp-search .erp-search-table .btn:hover,
+        .erp-search .erp-search-table .btn:focus {
+            color: #fff;
+            background: var(--primary);
+            border-color: var(--primary);
+            box-shadow: none;
+        }
+
+        /* ════════════════════════════ Responsive ════════════════════════════ */
+        @media (max-width: 1200px) {
+            .doc-page { grid-template-columns: minmax(0, 1fr); }
+            .doc-page .doc-page-aside {
+                grid-column: 1;
+                grid-row: auto;
+                order: 10;
+                position: static;
+                display: grid;
+                grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+                align-items: start;
+            }
+        }
+
+        @media (max-width: 992px) {
+            .mr-header.doc-titlebar { flex-direction: column; align-items: flex-start; }
+            .mr-info { text-align: left; }
+        }
+
+        @media (max-width: 800px) {
+            html body { padding: 8px 8px 16px; }
+            .doc-section { padding: 12px 14px 14px; }
+            .doc-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .mr-header.doc-titlebar { padding: 10px 12px; }
+            .doc-titlebar .mr-info { order: 10; text-align: left; width: 100%; }
+            .doc-page .doc-page-aside { grid-template-columns: minmax(0, 1fr); }
+        }
+
+        @media (max-width: 768px) {
+            .detail-header { padding: 10px 12px; }
+            .detail-table { font-size: 12px; }
+        }
+
+        @media (max-width: 520px) {
+            .doc-fields,
+            .doc-fields.cols-2 { grid-template-columns: minmax(0, 1fr); }
+            .doc-field.span-2 { grid-column: 1 / -1; }
+        }
+
+        @media (max-width: 480px) {
+            .detail-btn i { display: none; }
+        }
+
+        @media (max-width: 560px) {
+            .erp-search { padding: 8px; }
+            .erp-search-bar .erp-search-input { flex-basis: 100%; }
+            .erp-search-table thead th,
+            .erp-search-table tbody td { padding: 7px 8px; }
+        }
+
+        /* item lines become cards (label | value) on mobile / tablet; labels come from data-label */
+        @media (max-width: 900px) {
+            .detail-table#itemsTable {
+                --cell-h: 32px;
+                display: block;
+                width: 100%;
+                min-width: 0;
+                padding: 10px 10px 0;
+            }
+            .detail-table#itemsTable thead { display: none; }
+            .detail-table#itemsTable tbody { display: block; }
+            .detail-table#itemsTable tr.detail-row {
+                position: relative;
+                display: block;
+                margin-bottom: 10px;
+                overflow: hidden;
+                background: var(--surface);
+                border: 1px solid var(--border);
+                border-radius: var(--radius-lg);
+                box-shadow: var(--shadow);
+            }
+            .detail-table#itemsTable tr.detail-row > td {
+                position: static;
+                display: grid;
+                grid-template-columns: 40% minmax(0, 1fr);
+                column-gap: 10px;
+                row-gap: 2px;
+                align-items: center;
+                width: auto;
+                min-width: 0;
+                max-width: none;
+                padding: 4px 12px;
+                text-align: left;
+                border-right: none;
+                border-bottom: 1px solid #f1f5f9;
+                box-shadow: none;
+            }
+            .detail-table#itemsTable tr.detail-row > td:last-of-type { border-bottom: none; }
+            .detail-table#itemsTable tr.detail-row > td > * { grid-column: 2; min-width: 0; max-width: 100%; }
+            .detail-table#itemsTable tr.detail-row > td::before {
+                content: attr(data-label);
+                display: block;
+                grid-column: 1;
+                font-size: 11.5px;
+                font-weight: 600;
+                line-height: 1.3;
+                color: var(--text-2);
+                overflow-wrap: anywhere;
+            }
+            .detail-table#itemsTable tr.detail-row > td:first-child {
+                min-height: 40px;
+                padding-right: 52px;
+                font-size: 12.5px;
+                font-weight: 600;
+                color: var(--primary) !important;
+                background: var(--bg) !important;
+                border-bottom: 1px solid var(--border);
+            }
+            .detail-table#itemsTable tr.detail-row > td.line-del {
+                position: absolute;
+                z-index: 3;
+                top: 2px;
+                right: 4px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 0;
+                background: transparent;
+                border: none;
+            }
+            .detail-table#itemsTable tr.detail-row > td.line-del::before { content: none; }
+            .detail-table#itemsTable tr.detail-row > td.line-del .btn {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                width: 36px;
+                height: 36px;
+                margin: 0;
+                padding: 0;
+                font-size: 14px;
+                opacity: 1;
+            }
+        }
+
+        @media (min-width: 601px) and (max-width: 900px) {
+            .detail-table#itemsTable tr.detail-row {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+            .detail-table#itemsTable tr.detail-row > td.srl-col,
+            .detail-table#itemsTable tr.detail-row > td[data-label="Item Code"],
+            .detail-table#itemsTable tr.detail-row > td[data-label="Item Description"] { grid-column: 1 / -1; }
+            .detail-table#itemsTable tr.detail-row > td { grid-template-columns: 120px minmax(0, 1fr); }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container-fluid">
+<div class="mr-container doc-page">
+
+    <!-- ═════════════ Title bar ═════════════ -->
+    <div class="mr-header doc-titlebar">
+        <h1 class="doc-title-text">Stock Transfer Out</h1>
+        <div class="mr-title-wrapper">
+            <button type="button" class="doc-chip doc-chip-type" id="stoTitleBtn" onclick="toggleDocTypeMenu()" title="Click to switch document type">
+                <span id="stoTitleText">Stock Transfer Out</span>
+                <i class="fa fa-caret-down"></i>
+            </button>
+            <div class="mr-doctype-menu" id="stoDocTypeMenu"></div>
+        </div>
+        <span class="doc-title-spacer"></span>
+        <div class="mr-info">
+            Entered by: <strong id="stoEnteredBy">ADMIN</strong> - <span id="stoEnteredDate">20/10/2026 10:00</span><br>
+            Modified by: <strong id="stoModifiedBy">ADMIN</strong> - <span id="stoModifiedDate">20/10/2026 10:00</span>
+        </div>
+    </div>
+
+    <!-- The form wraps header fields, side panel and item lines so they post together -->
+    <form id="stoForm" class="doc-contents" method="POST" onkeydown="return event.key !== 'Enter' || event.target.tagName === 'TEXTAREA'">
+        <input type="hidden" name="is_update" id="is_update_field" value="0">
+        <input type="hidden" name="doc_type_selected" id="doc_type_selected_field" value="STO">
+        <input type="hidden" name="update_inventory" id="stoUpdateInventoryHidden" value="Y">
+
+        <!-- ═════════════ Header window ═════════════ -->
+        <div class="doc-form-wrap">
+        <div class="doc-layout no-aside">
+            <div class="doc-main">
+
+                <!-- ── Document ── -->
+                <div class="doc-section">
+                    <h4 class="doc-section-title">Document</h4>
+                    <div class="doc-fields">
+                        <div class="doc-field">
+                            <label class="doc-lbl">Doc No</label>
+                            <input type="text" name="doc_no" class="doc-inp" value="STO/00001" readonly>
+                        </div>
+                        <div class="doc-field">
+                            <label class="doc-lbl">Doc Date</label>
+                            <input type="date" name="doc_dt" class="doc-inp" value="2026-10-20">
+                        </div>
+                        <div class="doc-field">
+                            <label class="doc-lbl">Currency</label>
+                            <input type="text" class="doc-inp" value="AED" readonly>
+                        </div>
+                        <div class="doc-field">
+                            <label class="doc-lbl">EX.Rate</label>
+                            <input type="text" class="doc-inp text-right" value="1" readonly>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ── Location ── -->
+                <div class="doc-section">
+                    <h4 class="doc-section-title">Location</h4>
+                    <div class="doc-fields cols-2">
+                        <div class="doc-field">
+                            <label class="doc-lbl">Location From (OUT)</label>
+                            <select name="location_from" id="stoLocFrom" class="doc-inp" onchange="stoRefreshLines()"></select>
+                        </div>
+                        <div class="doc-field">
+                            <label class="doc-lbl">Location To (IN)</label>
+                            <select name="location_to" id="stoLocTo" class="doc-inp"></select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ── Notes ── -->
+                <div class="doc-section">
+                    <h4 class="doc-section-title">Notes</h4>
+                    <div class="doc-fields cols-2">
+                        <div class="doc-field span-2">
+                            <label class="doc-lbl">Narration</label>
+                            <textarea name="narration" class="doc-inp auto-resize" rows="1" maxlength="100"></textarea>
+                        </div>
+                    </div>
+                </div>
+
+            </div><!-- /.doc-main -->
+        </div><!-- /.doc-layout -->
+        </div><!-- /.doc-form-wrap -->
+
+        <!-- ═════════════ Side panel ═════════════ -->
+        <aside class="doc-page-aside">
+            <section class="doc-panel">
+                <h3 class="doc-section-title">Summary</h3>
+                <div class="doc-sum-line"><span>Lines</span><b id="stoSumLines">0</b></div>
+                <div class="doc-sum-line"><span>Total qty</span><b id="stoSumQty">0.00</b></div>
+            </section>
+            <section class="doc-panel doc-attach-panel">
+                <h3 class="doc-section-title">Attachments</h3>
+                <div class="doc-attach-empty"><i class="fa fa-paperclip"></i> No files attached</div>
+                <button type="button" class="doc-drop" onclick="alert('Attach files')">
+                    <i class="fa fa-cloud-upload"></i> Click to attach files
+                </button>
+            </section>
+        </aside>
+
+        <!-- ═════════════ Detail window (item lines) ═════════════ -->
+        <div class="detail-container">
+            <div class="detail-header">
+                <h2>Items</h2>
+            </div>
+
+            <div class="detail-table-wrapper">
+                <table class="detail-table" id="itemsTable">
+                    <thead>
+                        <tr>
+                            <th style="min-width: 60px;">No</th>
+                            <th style="min-width: 60px;">Line</th>
+                            <th style="min-width: 150px;">Item Code</th>
+                            <th style="min-width: 300px;">Item Description</th>
+                            <th style="min-width: 80px;">Loc</th>
+                            <th style="min-width: 100px;">Bin</th>
+                            <th style="min-width: 100px;">Stock</th>
+                            <th style="min-width: 100px;">Qty</th>
+                            <th style="min-width: 80px;">Unit</th>
+                            <th style="min-width: 60px;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="itemsBody"></tbody>
+                </table>
+            </div>
+
+            <div class="detail-toolbar detail-toolbar-bottom">
+                <button type="button" class="detail-btn detail-btn-link" id="addLineBtn" onclick="stoAddLine()">
+                    <i class="fa fa-plus"></i> Add line
+                </button>
+            </div>
+        </div><!-- /.detail-container -->
+
+        <div class="doc-actionbar">
+            <button type="submit" class="detail-btn detail-btn-primary" name="save_sto" onclick="return stoValidate();">
+                <i class="fa fa-save"></i> Save
+            </button>
+        </div>
+    </form>
+
+</div><!-- /.mr-container -->
+</div><!-- /.container-fluid -->
+
+<!-- ═════════════ Item search window ═════════════ -->
+<div id="itemSearchModal" class="popup-overlay erp-search" style="display:none;">
+    <div class="erp-search-dialog lg" role="dialog" aria-modal="true">
+        <div class="erp-search-head">
+            <h4 class="erp-search-title"><i class="fa fa-search"></i>Select Item</h4>
+            <button type="button" class="erp-search-close" onclick="stoCloseItemSearch()" title="Close" aria-label="Close"><i class="fa fa-times"></i></button>
+        </div>
+        <div class="erp-search-bar">
+            <div class="erp-search-input">
+                <i class="fa fa-search"></i>
+                <input type="text" id="itemSearchInput" autocomplete="off"
+                    placeholder="Search by Item Code, Name, or OEM Code..." onkeyup="stoSearchItems(this.value)">
+            </div>
+        </div>
+        <div class="erp-search-body">
+            <table class="erp-search-table" id="itemSearchResults">
+                <thead>
+                    <tr>
+                        <th>Item Code</th>
+                        <th>OEM Code</th>
+                        <th>Item Name</th>
+                        <th style="width: 90px; text-align: right;">Stock</th>
+                        <th style="width: 100px; text-align: center;">Action</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    // ═════════════ Data (replace with your backend) ═════════════
+    const DEMO_DOC_TYPES = { STO: 'Stock Transfer Out' };
+    const DEMO_LOCATIONS = { L01: 'Main Store', L02: 'Showroom', L03: 'Workshop' };
+    const DEMO_UNITS = ['BOX', 'KG', 'LTR', 'NOS', 'PCS'];
+    // Stock is per Location From; your lookup must return it for the selected location.
+    const DEMO_ITEMS = [
+        { item_code: 'ITM-0001', oem_code: 'OEM-A1', item_name: 'Oil Filter', unit: 'PCS', stock: 40 },
+        { item_code: 'ITM-0002', oem_code: 'OEM-B7', item_name: 'Brake Pad Set', unit: 'BOX', stock: 12 },
+        { item_code: 'ITM-0003', oem_code: 'OEM-C3', item_name: 'Engine Oil 5W-30', unit: 'LTR', stock: 250 },
+    ];
+
+    const IS_VIEW_MODE = false;          // true when an existing document is opened
+    const STO_RECEIVED = 'N';            // 'Y' = already received in the other location; editing is blocked
+    const STO_ALLOW_ZERO_STOCK = 'N';    // 'Y' = user may transfer more than the stock
+    const CURRENT_DOC_TYPE = 'STO';
+    const STO_UNITS = DEMO_UNITS;
+    // Saved lines when IS_VIEW_MODE: [{ line, code, desc, loc, bin, stock, qty, unit }]
+    const STO_LINES = [];
+
+    let isEditActive = !IS_VIEW_MODE;
+    let stoItemInput = null;
+    let stoItemResults = [];
+
+    // ═════════════ Header ═════════════
+    function stoLocationOptions(selected) {
+        var html = '<option value="">Select Location</option>';
+        Object.keys(DEMO_LOCATIONS).forEach(function (code) {
+            var name = DEMO_LOCATIONS[code];
+            html += '<option value="' + stoEsc(code) + '"' + (code === selected ? ' selected' : '') + '>'
+                + stoEsc(name ? code + ' - ' + name : code) + '</option>';
+        });
+        return html;
+    }
+    document.getElementById('stoLocFrom').innerHTML = stoLocationOptions('L01');
+    document.getElementById('stoLocTo').innerHTML = stoLocationOptions('');
+
+    document.getElementById('stoDocTypeMenu').innerHTML = Object.keys(DEMO_DOC_TYPES).map(function (code) {
+        return '<div class="mr-doctype-item' + (code === CURRENT_DOC_TYPE ? ' active' : '') + '" onclick="selectDocType(\'' + stoEsc(code) + '\')">'
+            + stoEsc(DEMO_DOC_TYPES[code]) + '</div>';
+    }).join('');
+
+    function toggleDocTypeMenu() {
+        document.getElementById('stoDocTypeMenu').classList.toggle('open');
+    }
+    function selectDocType(code) {
+        document.getElementById('stoDocTypeMenu').classList.remove('open');
+        document.getElementById('stoTitleText').textContent = DEMO_DOC_TYPES[code] || code;
+        document.getElementById('doc_type_selected_field').value = code;
+    }
+    document.addEventListener('click', function (e) {
+        var wrapper = document.getElementById('stoTitleBtn').closest('.mr-title-wrapper');
+        if (wrapper && !wrapper.contains(e.target)) {
+            document.getElementById('stoDocTypeMenu').classList.remove('open');
+        }
+    });
+
+    document.querySelectorAll('textarea.auto-resize').forEach(function (ta) {
+        function resize() {
+            ta.style.height = 'auto';
+            ta.style.height = ta.scrollHeight + 'px';
+        }
+        ta.addEventListener('input', resize);
+        if (ta.value) resize();
+    });
+
+    function stoApplyViewMode() {
+        if (!IS_VIEW_MODE) return;
+        var form = document.getElementById('stoForm');
+        form.querySelectorAll('input[name="doc_dt"], select[name="location_from"], select[name="location_to"]').forEach(function (el) { el.disabled = true; });
+        form.querySelector('textarea[name="narration"]').readOnly = true;
+        document.getElementById('addLineBtn').disabled = true;
+        form.querySelector('button[name="save_sto"]').disabled = true;
+    }
+
+    function enableEditMode() {
+        if (STO_RECEIVED === 'Y') {
+            alert("This transfer has already been received. Editing is not allowed.");
+            return false;
+        }
+        var form = document.getElementById('stoForm');
+        form.querySelectorAll('input:not([name="doc_no"]), select, textarea').forEach(function (el) {
+            if (el.type !== 'hidden' && !el.closest('#itemsBody')) {
+                el.removeAttribute('readonly');
+                el.removeAttribute('disabled');
+            }
+        });
+        form.querySelector('button[name="save_sto"]').disabled = false;
+        document.getElementById('is_update_field').value = '1';
+        stoDetailEnableEdit();
+        isEditActive = true;
+        return true;
+    }
+
+    function stoValidate() {
+        var from = document.getElementById('stoLocFrom').value;
+        var to = document.getElementById('stoLocTo').value;
+        if (!from) { alert('Please select Location From (OUT).'); return false; }
+        if (!to) { alert('Please select Location To (IN).'); return false; }
+        if (from === to) {
+            alert('Location From and Location To cannot be the same.');
+            return false;
+        }
+        var lines = 0, bad = '';
+        document.querySelectorAll('#itemsBody tr').forEach(function (tr) {
+            var code = tr.querySelector('input[name="item_code[]"]');
+            if (!code || !code.value.trim()) return;
+            lines++;
+            var qty = parseFloat((tr.querySelector('input[name="qty[]"]') || {}).value) || 0;
+            if (qty <= 0 && !bad) bad = code.value.trim();
+        });
+        if (!lines) { alert('Add at least one item line.'); return false; }
+        if (bad) { alert('Enter a quantity for item ' + bad + '.'); return false; }
+        return true;
+    }
+
+    // ═════════════ Detail (item lines) ═════════════
+    function stoEsc(v) {
+        return String(v == null ? '' : v)
+            .replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+            .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function stoLocFrom() {
+        var el = document.getElementById('stoLocFrom');
+        return el ? el.value : '';
+    }
+
+    function stoUnitOptions(selected) {
+        var list = STO_UNITS.slice();
+        if (selected && list.indexOf(selected) < 0) list.push(selected);
+        return '<option value="">--</option>' + list.map(function (u) {
+            return '<option value="' + stoEsc(u) + '"' + (u === selected ? ' selected' : '') + '>' + stoEsc(u) + '</option>';
+        }).join('');
+    }
+
+    // One item line; locked = saved document in view mode
+    function stoLineHtml(d, locked) {
+        var ro = locked ? ' readonly' : '';
+        return '<td data-label="No" class="srl-col"></td>'
+            + '<td data-label="Line" class="line-col"><input type="text" name="line_no[]" class="text-center" value="' + stoEsc(d.line) + '" readonly></td>'
+            + '<td data-label="Item Code"><input type="text" name="item_code[]" value="' + stoEsc(d.code) + '" readonly'
+            +     (locked ? '' : ' placeholder="Click to select" onclick="stoOpenItemSearch(this)"') + '></td>'
+            + '<td data-label="Item Description"><input type="text" name="item_desc[]" maxlength="250" value="' + stoEsc(d.desc) + '"' + ro + '></td>'
+            + '<td data-label="Loc"><input type="text" name="location[]" class="text-center" value="' + stoEsc(d.loc) + '" readonly></td>'
+            + '<td data-label="Bin"><input type="text" name="bin[]" maxlength="15" value="' + stoEsc(d.bin) + '"' + ro + '></td>'
+            + '<td data-label="Stock"><input type="text" name="stock[]" class="text-center stock-input" style="color: var(--danger);" value="' + (parseFloat(d.stock) || 0).toFixed(2) + '" readonly></td>'
+            + '<td data-label="Qty"><input type="number" name="qty[]" step="0.01" min="0" class="text-center" value="' + (d.qty !== '' && d.qty != null ? stoEsc(d.qty) : '0') + '"' + ro + '></td>'
+            + '<td data-label="Unit"><select name="unit[]" class="text-center"' + (locked ? ' disabled' : '') + '>' + stoUnitOptions(d.unit || '') + '</select></td>'
+            + '<td data-label="Action" class="text-center line-del">'
+            +     '<button type="button" class="btn btn-outline-danger btn-sm" onclick="stoDeleteRow(this)"' + (locked ? ' disabled' : '') + '>'
+            +         '<i class="fa fa-trash"></i></button></td>';
+    }
+
+    function stoReindex() {
+        var rows = document.getElementById('itemsBody').rows;
+        for (var i = 0; i < rows.length; i++) {
+            rows[i].cells[0].textContent = String(i + 1).padStart(4, '0');
+        }
+        stoUpdateSummary();
+    }
+
+    function stoAppendLine(d, locked) {
+        var tr = document.getElementById('itemsBody').insertRow();
+        tr.className = 'detail-row';
+        tr.innerHTML = stoLineHtml(d, locked);
+        stoReindex();
+        return tr;
+    }
+
+    function stoAddLine() {
+        if (!isEditActive) return;
+        var max = 0;
+        document.querySelectorAll('#itemsBody input[name="line_no[]"]').forEach(function (el) {
+            max = Math.max(max, parseInt(el.value, 10) || 0);
+        });
+        return stoAppendLine({ line: max + 1, code: '', desc: '', loc: stoLocFrom(), bin: '', stock: 0, qty: 0, unit: '' }, false);
+    }
+
+    function stoDeleteRow(btn) {
+        var tr = btn.closest('tr');
+        if (tr) tr.remove();
+        stoReindex();
+    }
+
+    // Side panel summary: line count and total quantity
+    function stoUpdateSummary() {
+        var lines = 0, qty = 0;
+        document.querySelectorAll('#itemsBody tr').forEach(function (tr) {
+            var code = tr.querySelector('input[name="item_code[]"]');
+            if (!code || !code.value.trim()) return;
+            lines++;
+            qty += parseFloat((tr.querySelector('input[name="qty[]"]') || {}).value) || 0;
+        });
+        document.getElementById('stoSumLines').textContent = lines;
+        document.getElementById('stoSumQty').textContent = qty.toFixed(2);
+    }
+
+    // Qty > Stock check (skipped when the user may transfer more than the stock)
+    document.getElementById('itemsBody').addEventListener('input', function (e) {
+        if (STO_ALLOW_ZERO_STOCK === 'Y' || !e.target || e.target.name !== 'qty[]') return;
+        var tr = e.target.closest('tr');
+        var stockQty = parseFloat((tr.querySelector('input[name="stock[]"]') || {}).value) || 0;
+        if ((parseFloat(e.target.value) || 0) > stockQty) {
+            alert('Entered Qty is more than the Stock..');
+            e.target.value = Math.max(stockQty, 0).toFixed(2);
+        }
+    });
+    document.getElementById('itemsBody').addEventListener('input', stoUpdateSummary);
+
+    // Item lookup: returns [{ item_code, oem_code, item_name, unit, stock }] for the term at Location From
+    function stoFetchItems(term, location) {
+        var t = String(term || '').toLowerCase();
+        return Promise.resolve(DEMO_ITEMS.filter(function (it) {
+            return !t || [it.item_code, it.item_name, it.oem_code].some(function (v) { return String(v).toLowerCase().indexOf(t) >= 0; });
+        }));
+    }
+
+    // Stock lookup: returns { item_code: stock } for the codes at Location From
+    function stoFetchStock(codes, location) {
+        var stock = {};
+        codes.forEach(function (c) {
+            var it = DEMO_ITEMS.find(function (x) { return x.item_code === c; });
+            stock[c] = it ? it.stock : 0;
+        });
+        return Promise.resolve(stock);
+    }
+
+    // Location From changed: every line follows it and its stock is re-read
+    function stoRefreshLines() {
+        var loc = stoLocFrom();
+        var codes = [];
+        document.querySelectorAll('#itemsBody tr').forEach(function (tr) {
+            var locEl = tr.querySelector('input[name="location[]"]');
+            if (locEl) locEl.value = loc;
+            var code = tr.querySelector('input[name="item_code[]"]').value.trim();
+            if (code) codes.push(code);
+        });
+        if (!codes.length) return;
+        stoFetchStock(codes, loc).then(function (stock) {
+            document.querySelectorAll('#itemsBody tr').forEach(function (tr) {
+                var code = tr.querySelector('input[name="item_code[]"]').value.trim();
+                if (code && Object.prototype.hasOwnProperty.call(stock, code)) {
+                    tr.querySelector('input[name="stock[]"]').value = (parseFloat(stock[code]) || 0).toFixed(2);
+                }
+            });
+        });
+    }
+
+    function stoOpenItemSearch(input) {
+        if (!isEditActive) return;
+        if (!stoLocFrom()) {
+            alert('Please select Location From (OUT) first.');
+            return;
+        }
+        stoItemInput = input;
+        document.getElementById('itemSearchModal').style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+        var box = document.getElementById('itemSearchInput');
+        box.value = '';
+        box.focus();
+        stoSearchItems('');
+    }
+
+    function stoCloseItemSearch() {
+        document.getElementById('itemSearchModal').style.display = 'none';
+        document.body.style.overflow = '';
+        stoItemInput = null;
+    }
+
+    var stoSearchTimer;
+    function stoSearchItems(query) {
+        clearTimeout(stoSearchTimer);
+        stoSearchTimer = setTimeout(function () {
+            var tbody = document.querySelector('#itemSearchResults tbody');
+            stoFetchItems(query, stoLocFrom())
+                .then(function (data) {
+                    tbody.innerHTML = '';
+                    if (!Array.isArray(data) || !data.length) {
+                        tbody.innerHTML = '<tr><td colspan="5" class="text-center p-3">No items found</td></tr>';
+                        return;
+                    }
+                    stoItemResults = data;
+                    data.forEach(function (item, i) {
+                        var tr = document.createElement('tr');
+                        tr.innerHTML = '<td>' + stoEsc(item.item_code) + '</td>'
+                            + '<td>' + stoEsc(item.oem_code) + '</td>'
+                            + '<td>' + stoEsc(item.item_name) + '</td>'
+                            + '<td class="text-right">' + (parseFloat(item.stock) || 0).toFixed(2) + '</td>'
+                            + '<td class="text-center"><button type="button" class="btn btn-primary btn-sm" onclick="stoSelectItem(' + i + ')">Select</button></td>';
+                        tbody.appendChild(tr);
+                    });
+                })
+                .catch(function (err) {
+                    console.error('Error fetching items:', err);
+                    tbody.innerHTML = '<tr><td colspan="5" class="text-center p-3 text-danger">Network or Parsing Error</td></tr>';
+                });
+        }, 300);
+    }
+
+    function stoSelectItem(i) {
+        var item = stoItemResults[i];
+        if (item && stoItemInput) {
+            var tr = stoItemInput.closest('tr');
+            stoItemInput.value = item.item_code;
+            tr.querySelector('input[name="item_desc[]"]').value = item.item_name;
+            tr.querySelector('input[name="location[]"]').value = stoLocFrom();
+            tr.querySelector('input[name="stock[]"]').value = (parseFloat(item.stock) || 0).toFixed(2);
+            tr.querySelector('select[name="unit[]"]').innerHTML = stoUnitOptions(item.unit || '');
+            var qty = tr.querySelector('input[name="qty[]"]');
+            stoCloseItemSearch();
+            stoUpdateSummary();
+            if (qty) qty.select();
+            return;
+        }
+        stoCloseItemSearch();
+    }
+
+    // Unlocks the lines of a saved document (called from enableEditMode)
+    function stoDetailEnableEdit() {
+        document.getElementById('addLineBtn').removeAttribute('disabled');
+        document.querySelectorAll('#itemsBody tr').forEach(function (tr) {
+            ['input[name="item_desc[]"]', 'input[name="bin[]"]', 'input[name="qty[]"]'].forEach(function (sel) {
+                var el = tr.querySelector(sel);
+                if (el) el.removeAttribute('readonly');
+            });
+            var unit = tr.querySelector('select[name="unit[]"]');
+            if (unit) unit.disabled = false;
+            var del = tr.querySelector('.line-del button');
+            if (del) del.disabled = false;
+            var code = tr.querySelector('input[name="item_code[]"]');
+            if (code) {
+                code.placeholder = 'Click to select';
+                code.onclick = function () { stoOpenItemSearch(this); };
+            }
+        });
+    }
+
+    STO_LINES.forEach(function (d) { stoAppendLine(d, IS_VIEW_MODE); });
+    if (!IS_VIEW_MODE && !document.getElementById('itemsBody').rows.length) stoAddLine();
+    stoApplyViewMode();
+    stoUpdateSummary();
+</script>
+</body>
+</html>

@@ -1,0 +1,120 @@
+/* ════════════════════════════════════════════════════════════
+   ERP Dashboard — page-specific styles
+   ════════════════════════════════════════════════════════════ */
+
+:root {
+    --dash-blue: #2563eb;
+}
+
+.dash-topbar-inner {
+    min-height: 2.75rem;
+}
+
+.dash-topbar-brand,
+.dash-topbar-meta {
+    align-items: center;
+}
+
+.dash-topbar-user {
+    max-width: min(100%, 18rem);
+}
+
+.dash-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 1rem;
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+.dash-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 14px 30px -16px rgba(15, 23, 42, 0.18);
+}
+
+.dash-stat {
+    position: relative;
+    overflow: hidden;
+}
+.dash-stat::after {
+    content: "";
+    position: absolute;
+    top: 0; right: 0;
+    width: 80px; height: 80px;
+    background: radial-gradient(circle, rgba(37,99,235,0.08) 0%, transparent 70%);
+    pointer-events: none;
+}
+
+.dash-stat-count {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.03em;
+}
+
+.dash-chart-wrap {
+    position: relative;
+    height: 260px;
+}
+.dash-chart-wrap--sm { height: 220px; }
+
+.dash-table th {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #64748b;
+    background: #f8fafc;
+}
+.dash-table td { font-size: 0.8125rem; }
+
+.dash-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.6875rem;
+    font-weight: 700;
+}
+.dash-status--pending { background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; }
+.dash-status--approved { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+
+.dash-timeline-item {
+    position: relative;
+    padding-left: 1.5rem;
+    padding-bottom: 1.25rem;
+}
+.dash-timeline-item::before {
+    content: "";
+    position: absolute;
+    left: 0.3125rem;
+    top: 0.375rem;
+    bottom: 0;
+    width: 2px;
+    background: #e2e8f0;
+}
+.dash-timeline-item:last-child::before { display: none; }
+.dash-timeline-dot {
+    position: absolute;
+    left: 0;
+    top: 0.25rem;
+    width: 0.75rem;
+    height: 0.75rem;
+    border-radius: 999px;
+    background: var(--dash-blue);
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 2px #dbeafe;
+}
+
+@keyframes dashFadeUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+.dash-animate { animation: dashFadeUp 0.5s ease forwards; opacity: 0; }
+.dash-d1 { animation-delay: 0.04s; }
+.dash-d2 { animation-delay: 0.08s; }
+.dash-d3 { animation-delay: 0.12s; }
+.dash-d4 { animation-delay: 0.16s; }
+.dash-d5 { animation-delay: 0.20s; }
+
+@media (prefers-reduced-motion: reduce) {
+    .dash-animate { animation: none; opacity: 1; }
+    .dash-card { transition: none; }
+}

@@ -1,0 +1,463 @@
+/*
+ * Search / lookup windows — shared by every document screen
+ * (toolbar Find, customer / account / item / job / vehicle / activity lookups,
+ *  Select From Transfer Out, Job BOM).
+ *
+ * Loaded by shared/toolbar.php, so every page that has the document toolbar gets it.
+ * Uses the design tokens from erp_document.css (fallbacks for pages without it).
+ *
+ *   .erp-search ............... overlay (add next to .popup-overlay)
+ *   .erp-search-dialog ........ window      (.lg / .xl for wider windows)
+ *   .erp-search-head .......... title + close / actions
+ *   .erp-search-bar ........... search input (+ optional buttons)
+ *   .erp-search-meta .......... "Search results" + count
+ *   .erp-search-list / -row ... card results (Find, customers)
+ *   .erp-search-body / -table . table results (items, accounts, jobs …)
+ *   .erp-search-panes / -pane . two-panel windows (document list + its items)
+ *
+ * Form popups (remarks, narration, signature, send e-mail …) use the same window:
+ *   .erp-search-dialog.sm ..... narrow window that grows with its content
+ *   .erp-search-content ....... padded, scrolling body
+ *   .erp-search-label / -field / -textarea / -note / -panel / -msg
+ *   .erp-search-foot .......... footer buttons (right aligned)
+ *   .erp-search-confirm ....... Yes/No box laid over the window
+ *
+ * Print preview (toolbar Preview): .erp-search-dialog.preview holds the print_preview iframe.
+ */
+
+/* ── overlay + window ── */
+.erp-search {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    background: rgba(15, 23, 42, .45);
+}
+.erp-search-dialog {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: 720px;
+    height: min(620px, 88vh);
+    font-family: inherit;
+    color: var(--text, #0f172a);
+    background: var(--surface, #fff);
+    border: 1px solid var(--border, #e2e8f0);
+    border-radius: var(--radius-lg, 10px);
+    box-shadow: 0 12px 32px rgba(15, 23, 42, .18);
+    overflow: hidden;
+}
+.erp-search-dialog.lg { max-width: 900px; }
+.erp-search-dialog.xl { max-width: 1080px; height: min(700px, 90vh); }
+.erp-search-dialog.sm { max-width: 480px; height: auto; max-height: 92vh; }
+.erp-search-dialog.preview { max-width: 1000px; height: 100%; background: #e9edf2; }
+.erp-search-dialog.preview iframe { flex: 1 1 auto; width: 100%; border: 0; }
+
+/* ── title row ── */
+.erp-search-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border, #e2e8f0);
+}
+.erp-search-title {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.3;
+    color: var(--text, #0f172a);
+}
+.erp-search-title > i { margin-right: 6px; color: var(--primary, #4a6cd4); }
+.erp-search-subtitle { margin: 2px 0 0; font-size: 12px; color: var(--text-3, #94a3b8); }
+.erp-search-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.erp-search-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-2, #475569);
+    cursor: pointer;
+}
+.erp-search-check input { accent-color: var(--primary, #4a6cd4); }
+.erp-search-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    color: var(--text-2, #475569);
+    background: transparent;
+    border: 1px solid var(--border, #e2e8f0);
+    border-radius: var(--radius, 6px);
+    cursor: pointer;
+    transition: background-color .12s, color .12s, border-color .12s;
+}
+.erp-search-close:hover { color: var(--text, #0f172a); background: var(--bg, #f8fafc); border-color: var(--border-strong, #cbd5e1); }
+
+/* ── search bar ── */
+.erp-search-bar { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 16px; }
+.erp-search-input { position: relative; flex: 1 1 260px; min-width: 0; }
+.erp-search-input > i {
+    position: absolute;
+    left: 11px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 13px;
+    color: var(--primary, #4a6cd4);
+    pointer-events: none;
+}
+.erp-search-input input {
+    width: 100%;
+    height: 34px;
+    margin: 0;
+    padding: 0 12px 0 32px;
+    font-family: inherit;
+    font-size: 13px;
+    color: var(--text, #0f172a);
+    background: var(--surface, #fff);
+    border: 1px solid var(--border-strong, #cbd5e1);
+    border-radius: var(--radius, 6px);
+    transition: border-color .12s, box-shadow .12s;
+}
+.erp-search-input input::placeholder { color: var(--text-3, #94a3b8); }
+.erp-search-input input:focus {
+    outline: none;
+    border-color: var(--primary, #4a6cd4);
+    box-shadow: 0 0 0 3px var(--primary-ring, rgba(74, 108, 212, .18));
+}
+
+/* ── buttons ── */
+.erp-search-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: 34px;
+    padding: 0 14px;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1;
+    white-space: nowrap;
+    color: var(--text-2, #475569);
+    background: var(--surface, #fff);
+    border: 1px solid var(--border-strong, #cbd5e1);
+    border-radius: var(--radius, 6px);
+    cursor: pointer;
+    transition: background-color .12s, border-color .12s, color .12s;
+}
+.erp-search-btn:hover { color: var(--text, #0f172a); background: var(--bg, #f8fafc); }
+.erp-search-btn.primary { color: #fff; background: var(--primary, #4a6cd4); border-color: var(--primary, #4a6cd4); }
+.erp-search-btn.primary:hover { background: var(--primary-hover, #3a59b8); border-color: var(--primary-hover, #3a59b8); }
+.erp-search-btn.sm { height: 30px; padding: 0 12px; font-size: 12.5px; }
+.erp-search-btn.link { height: auto; padding: 0; color: var(--primary, #4a6cd4); background: none; border: none; }
+.erp-search-btn.link:hover { color: var(--primary-hover, #3a59b8); background: none; text-decoration: underline; }
+.erp-search-btn:disabled,
+.erp-search-btn:disabled:hover { opacity: .55; cursor: not-allowed; }
+.erp-search-btn.primary:disabled:hover { background: var(--primary, #4a6cd4); border-color: var(--primary, #4a6cd4); }
+
+/* row action (Open / Select) */
+.erp-search-open,
+.erp-search .erp-search-table .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: 28px;
+    padding: 0 12px;
+    font-family: inherit;
+    font-size: 12.5px;
+    font-weight: 500;
+    line-height: 1;
+    white-space: nowrap;
+    color: var(--primary, #4a6cd4);
+    background: var(--surface, #fff);
+    border: 1px solid var(--primary, #4a6cd4);
+    border-radius: var(--radius, 6px);
+    box-shadow: none;
+    cursor: pointer;
+    transition: background-color .12s, color .12s;
+}
+.erp-search-open:hover,
+.erp-search .erp-search-table .btn:hover,
+.erp-search .erp-search-table .btn:focus {
+    color: #fff;
+    background: var(--primary, #4a6cd4);
+    border-color: var(--primary, #4a6cd4);
+    box-shadow: none;
+}
+.erp-search-open i,
+.erp-search .erp-search-table .btn i { font-size: 11px; }
+
+/* ── results header ── */
+.erp-search-meta {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 16px 8px;
+    border-top: 1px solid var(--border, #e2e8f0);
+}
+.erp-search-meta-title { font-size: 13px; font-weight: 600; color: var(--text, #0f172a); }
+.erp-search-meta-sub { margin-top: 1px; font-size: 12px; color: var(--text-3, #94a3b8); }
+.erp-search-count { font-size: 12px; color: var(--text-2, #475569); white-space: nowrap; }
+
+/* ── card results ── */
+.erp-search-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0 16px 16px; }
+.erp-search-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 8px;
+    padding: 10px 12px;
+    background: var(--surface, #fff);
+    border: 1px solid var(--border, #e2e8f0);
+    border-radius: var(--radius-lg, 10px);
+    transition: border-color .12s, background-color .12s;
+}
+.erp-search-row:hover { border-color: var(--border-strong, #cbd5e1); background: var(--bg, #f8fafc); }
+.erp-search-ico {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 36px;
+    height: 36px;
+    font-size: 15px;
+    color: var(--primary, #4a6cd4);
+    background: rgba(74, 108, 212, .08);
+    border-radius: 8px;
+}
+.erp-search-main { flex: 1 1 auto; min-width: 0; }
+.erp-search-name { font-size: 14px; font-weight: 600; color: var(--text, #0f172a); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.erp-search-sub,
+.erp-search-extra { font-size: 12px; color: var(--text-2, #475569); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.erp-search-extra { color: var(--text-3, #94a3b8); }
+.erp-search-extra i { margin-right: 4px; }
+.erp-search-state { padding: 28px 12px; text-align: center; font-size: 13px; color: var(--text-3, #94a3b8); }
+.erp-search-state.error { color: var(--danger, #cc2c2a); }
+
+/* ── table results ── */
+.erp-search-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    margin: 0 16px 16px;
+    border: 1px solid var(--border, #e2e8f0);
+    border-radius: var(--radius-lg, 10px);
+}
+.erp-search-head + .erp-search-body,
+.erp-search-bar[style*="none"] + .erp-search-body { margin-top: 12px; }
+.erp-search-table {
+    width: 100%;
+    margin: 0;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 13px;
+    color: var(--text, #0f172a);
+}
+.erp-search-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    padding: 8px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    text-align: left;
+    white-space: nowrap;
+    color: var(--text-2, #475569);
+    background: var(--bg, #f8fafc);
+    border-bottom: 1px solid var(--border, #e2e8f0);
+}
+.erp-search-table tbody td {
+    padding: 8px 12px;
+    vertical-align: middle;
+    border-bottom: 1px solid #f1f5f9;
+}
+.erp-search-table tbody tr:last-child td { border-bottom: none; }
+.erp-search-table tbody tr:hover { background: var(--bg, #f8fafc); }
+.erp-search-table tbody td:first-child { font-weight: 600; }
+.erp-search-table tbody td[colspan] { font-weight: 400; color: var(--text-3, #94a3b8); }
+.erp-search-table input[type="checkbox"] { accent-color: var(--primary, #4a6cd4); }
+.erp-search-table input[type="number"],
+.erp-search-table input[type="text"] {
+    height: 28px;
+    padding: 0 6px;
+    font-family: inherit;
+    font-size: 12.5px;
+    border: 1px solid var(--border-strong, #cbd5e1);
+    border-radius: var(--radius, 6px);
+}
+
+/* ── two-panel windows ── */
+.erp-search-panes { display: flex; flex: 1 1 auto; min-height: 0; gap: 12px; padding: 12px 16px 16px; }
+.erp-search-pane {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 0;
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid var(--border, #e2e8f0);
+    border-radius: var(--radius-lg, 10px);
+}
+.erp-search-pane.wide { flex: 2 1 0; }
+.erp-search-pane-head {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 12px;
+    background: var(--bg, #f8fafc);
+    border-bottom: 1px solid var(--border, #e2e8f0);
+}
+.erp-search-pane-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.erp-search-pane-title { margin: 0; font-size: 13px; font-weight: 600; color: var(--text, #0f172a); }
+.erp-search-pane .erp-search-body { margin: 0; border: none; border-radius: 0; }
+.erp-search-pane .erp-search-input { flex: none; }
+
+/* ── form popups ── */
+.erp-search-content {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 14px 16px;
+}
+.erp-search-text { margin: 0; font-size: 13px; line-height: 1.5; color: var(--text-2, #475569); }
+.erp-search-text strong { color: var(--text, #0f172a); font-weight: 600; }
+.erp-search-label {
+    display: block;
+    margin: 0 0 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-2, #475569);
+}
+.erp-search-label .req { color: var(--danger, #cc2c2a); }
+.erp-search-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.erp-search-field,
+.erp-search-textarea {
+    display: block;
+    width: 100%;
+    margin: 0;
+    font-family: inherit;
+    font-size: 13px;
+    color: var(--text, #0f172a);
+    background: var(--surface, #fff);
+    border: 1px solid var(--border-strong, #cbd5e1);
+    border-radius: var(--radius, 6px);
+    transition: border-color .12s, box-shadow .12s;
+}
+.erp-search-field { height: 34px; padding: 0 10px; }
+.erp-search-field[readonly] { color: var(--text-2, #475569); background: var(--bg, #f8fafc); border-color: var(--border, #e2e8f0); }
+.erp-search-textarea { min-height: 120px; padding: 8px 10px; line-height: 1.5; resize: vertical; }
+.erp-search-field::placeholder,
+.erp-search-textarea::placeholder { color: var(--text-3, #94a3b8); }
+.erp-search-field:focus,
+.erp-search-textarea:focus {
+    outline: none;
+    border-color: var(--primary, #4a6cd4);
+    box-shadow: 0 0 0 3px var(--primary-ring, rgba(74, 108, 212, .18));
+}
+.erp-search-error { margin: 4px 0 0; font-size: 12px; color: var(--danger, #cc2c2a); }
+.erp-search-panel {
+    padding: 10px 12px;
+    background: var(--bg, #f8fafc);
+    border: 1px solid var(--border, #e2e8f0);
+    border-radius: var(--radius-lg, 10px);
+}
+.erp-search-panel-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--text-3, #94a3b8);
+}
+.erp-search-panel-value { margin-top: 2px; font-size: 13.5px; font-weight: 600; color: var(--text, #0f172a); word-break: break-word; }
+.erp-search-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 9px 12px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--text-2, #475569);
+    background: rgba(74, 108, 212, .06);
+    border: 1px solid rgba(74, 108, 212, .18);
+    border-radius: var(--radius, 6px);
+}
+.erp-search-note > i { margin-top: 2px; color: var(--primary, #4a6cd4); }
+.erp-search-msg {
+    padding: 8px 12px;
+    font-size: 12.5px;
+    border: 1px solid;
+    border-radius: var(--radius, 6px);
+}
+.erp-search-msg.error { color: #b91c1c; background: #fef2f2; border-color: #fecaca; }
+.erp-search-msg.success { color: #15803d; background: #f0fdf4; border-color: #bbf7d0; }
+.erp-search-msg.warn { color: #b45309; background: #fffbeb; border-color: #fde68a; }
+.erp-search-foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 12px 16px;
+    border-top: 1px solid var(--border, #e2e8f0);
+}
+.erp-search-foot-start { margin-right: auto; }
+.erp-search-body + .erp-search-foot,
+.erp-search-state + .erp-search-foot { margin-top: auto; }
+
+/* Yes/No box shown on top of a window */
+.erp-search-confirm {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: rgba(15, 23, 42, .45);
+}
+.erp-search-confirm-box {
+    width: 100%;
+    max-width: 360px;
+    background: var(--surface, #fff);
+    border: 1px solid var(--border, #e2e8f0);
+    border-radius: var(--radius-lg, 10px);
+    box-shadow: 0 12px 32px rgba(15, 23, 42, .22);
+}
+.erp-search-confirm-box .erp-search-foot { border-top: none; padding-top: 0; }
+
+/* ── small screens ── */
+@media (max-width: 720px) {
+    .erp-search-panes { flex-direction: column; }
+    .erp-search-pane,
+    .erp-search-pane.wide { flex: 1 1 auto; min-height: 220px; }
+}
+@media (max-width: 720px) {
+    .erp-search.erp-search-preview { padding: 0; }
+    .erp-search-dialog.preview { border: 0; border-radius: 0; }
+}
+@media (max-width: 560px) {
+    .erp-search { padding: 8px; }
+    .erp-search.erp-search-preview { padding: 0; }
+    .erp-search-bar .erp-search-input { flex-basis: 100%; }
+    .erp-search-bar .erp-search-btn { flex: 1 1 0; }
+    .erp-search-row { gap: 10px; padding: 8px 10px; }
+    .erp-search-ico { display: none; }
+    .erp-search-grid { grid-template-columns: 1fr; }
+    .erp-search-table thead th,
+    .erp-search-table tbody td { padding: 7px 8px; }
+}

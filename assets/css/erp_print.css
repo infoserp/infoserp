@@ -1,0 +1,475 @@
+/*
+ * Print preview — shared by every document's toolbar Preview (shared/print_preview.php)
+ * and by the PDF download (same sheets rendered through Dompdf).
+ *
+ *   Preview page ..... .erp-print-page, .erp-print-bar, .erp-print-name, .erp-print-msg
+ *   A4 sheet ......... .erp-print-sheet (.pf-break starts a new page)
+ *   Print formats .... .pf-company, .pf-title, .pf-boxes / .pf-box, .pf-kv, .pf-narr,
+ *                      .pf-items (.pf-fill, .pf-total), .pf-pageno, .pf-sign
+ *   Invoice layout ... .pf-inv-sheet (.pf-inv-head / .pf-inv-body / .pf-inv-foot), .pf-inv-*
+ *
+ * Sheet and .pf-* rules are rendered by Dompdf too: keep them to tables, borders and
+ * mm/pt units (no flex, grid or CSS variables).
+ */
+
+@page { size: A4; margin: 0; }
+
+/* ════════════════════════════ Preview page ════════════════════════════ */
+html body.erp-print-page {
+    background: #e9edf2;
+    padding: 12px 16px 24px;
+}
+.toolbar.erp-print-bar {
+    max-width: 210mm;
+    margin: 0 auto 14px;
+}
+.erp-print-name {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+    margin-left: 4px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text, #0f172a);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.erp-print-name span {
+    font-weight: 500;
+    color: var(--text-2, #475569);
+}
+.erp-print-page .erp-print-sheet {
+    margin: 0 auto 16px;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, .12), 0 10px 28px -14px rgba(15, 23, 42, .35);
+}
+/* mobile / tablet: sheets are zoomed to the screen width by erpPrintFitWidth(); bar stays on one row */
+@media (max-width: 860px) {
+    html body.erp-print-page { padding: 8px 8px 16px; }
+    .toolbar.erp-print-bar {
+        flex-wrap: nowrap;
+        margin-bottom: 8px;
+    }
+    .erp-print-name {
+        display: block;
+        flex: 1 1 auto;
+    }
+    .erp-print-name span { margin-left: 4px; }
+    .erp-print-page .erp-print-sheet { margin-bottom: 10px; }
+}
+.erp-print-msg {
+    max-width: 210mm;
+    margin: 40px auto;
+    padding: 28px;
+    text-align: center;
+    color: var(--text-2, #475569);
+    background: var(--surface, #fff);
+    border: 1px solid var(--border, #e2e8f0);
+    border-radius: var(--radius-lg, 10px);
+}
+.erp-print-msg i {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 22px;
+    color: var(--text-3, #94a3b8);
+}
+
+@media print {
+    html body.erp-print-page {
+        background: #fff;
+        padding: 0;
+    }
+    .erp-print-page .erp-print-bar,
+    .erp-print-page .erp-print-msg {
+        display: none !important;
+    }
+    .erp-print-page .erp-print-pages { zoom: 1 !important; }
+    .erp-print-page .erp-print-sheet {
+        margin: 0;
+        box-shadow: none;
+    }
+}
+
+/* ════════════════════════════ A4 sheet ════════════════════════════ */
+.erp-print-sheet {
+    position: relative;
+    width: 210mm;
+    height: 297mm;
+    padding: 10mm 12mm;
+    overflow: hidden;
+    box-sizing: border-box;
+    background: #fff;
+    color: #000;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 9pt;
+    line-height: 1.25;
+}
+.erp-print-sheet.pf-break {
+    page-break-before: always;
+    break-before: page;
+}
+.erp-print-pdf {
+    margin: 0;
+    padding: 0;
+}
+/* Dompdf ignores box-sizing: size the content box so sheet + padding stays one A4 page */
+.erp-print-pdf .erp-print-sheet {
+    width: 186mm;
+    height: 275mm;
+    box-sizing: content-box;
+}
+.erp-print-pdf .pf-items {
+    table-layout: auto;
+}
+
+/* ════════════════════════════ Print format blocks ════════════════════════════ */
+.pf-company {
+    text-align: center;
+    padding-bottom: 2.5mm;
+    border-bottom: 1px solid #000;
+}
+.pf-company-name {
+    font-size: 14pt;
+    letter-spacing: .3pt;
+}
+.pf-company-addr {
+    margin-top: 1.5mm;
+    font-size: 9pt;
+}
+.pf-title {
+    margin: 3.5mm 0 2.5mm;
+    text-align: center;
+}
+.pf-title span {
+    font-family: "Times New Roman", Times, serif;
+    font-size: 13pt;
+    font-weight: bold;
+    letter-spacing: 1pt;
+    text-decoration: underline;
+}
+
+/* two bordered boxes side by side (e.g. From / To and Voucher No. / Date) */
+.pf-boxes {
+    width: 100%;
+    border-collapse: collapse;
+}
+.pf-boxes td.pf-box {
+    height: 16mm;
+    padding: 1.5mm 2mm;
+    vertical-align: top;
+    border: 1px solid #000;
+}
+.pf-boxes td.pf-gap {
+    width: 3mm;
+    border: none;
+}
+
+/* label : value rows inside a box */
+.pf-kv {
+    width: 100%;
+    border-collapse: collapse;
+}
+.pf-kv td {
+    padding: .8mm 0;
+    vertical-align: baseline;
+}
+.pf-kv td.pf-k {
+    width: 30mm;
+}
+.pf-kv td.pf-sep {
+    width: 5mm;
+    text-align: center;
+}
+.pf-kv td.pf-v {
+    font-size: 10.5pt;
+}
+
+.pf-narr {
+    margin: 2mm 0 1.5mm 1mm;
+}
+
+/* item table: column lines run down to the total row */
+.pf-items {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    border: 1px solid #000;
+}
+.pf-items th {
+    height: 6.5mm;
+    padding: 0 1.5mm;
+    font-weight: bold;
+    text-align: center;
+    vertical-align: middle;
+    border: 1px solid #000;
+}
+.pf-items td {
+    height: 5.5mm;
+    padding: .6mm 1.5mm 0;
+    vertical-align: top;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    border-left: 1px solid #000;
+    border-right: 1px solid #000;
+}
+.pf-items td.num { text-align: right; }
+.pf-items td.center { text-align: center; }
+.pf-items tr.pf-fill td {
+    padding: 0;
+}
+.pf-items tr.pf-total td {
+    height: 6.5mm;
+    padding: 0 1.5mm;
+    font-weight: bold;
+    vertical-align: middle;
+    border: 1px solid #000;
+}
+
+.pf-pageno {
+    margin-top: 2mm;
+    text-align: right;
+    font-weight: bold;
+}
+
+/* signature line at the foot of each page */
+.pf-sign {
+    width: 100%;
+    margin-top: 12mm;
+    border-collapse: collapse;
+}
+.pf-sign td {
+    width: 33.33%;
+    font-weight: bold;
+}
+.pf-sign td.center { text-align: center; }
+.pf-sign td.right { text-align: right; }
+
+/* ════════════════════════════ Invoice layout (.pf-inv-*) ════════════════════════════
+ * Full-bleed letter header / footer bands (branch_master images, blank when not set),
+ * content in .pf-inv-body between them.
+ */
+.erp-print-sheet.pf-inv-sheet {
+    padding: 0;
+    color: #0f172a;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+}
+.erp-print-pdf .erp-print-sheet.pf-inv-sheet {
+    width: 210mm;
+    height: 296mm;
+}
+.pf-inv-head {
+    height: 38mm;
+    overflow: hidden;
+}
+.pf-inv-foot {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: 210mm;
+    height: 22mm;
+    overflow: hidden;
+}
+.pf-inv-head img,
+.pf-inv-foot img {
+    display: block;
+    width: 210mm;
+    height: 100%;
+}
+.pf-inv-head img { height: 38mm; }
+.pf-inv-foot img { height: 22mm; }
+.pf-inv-body {
+    padding: 2mm 12mm 0;
+}
+
+.pf-inv-title {
+    margin-bottom: 3mm;
+    text-align: center;
+}
+.pf-inv-title-main {
+    font-size: 16pt;
+    font-weight: bold;
+    letter-spacing: 2.5pt;
+    color: #0f172a;
+}
+.pf-inv-trn {
+    margin-top: .8mm;
+    font-size: 9pt;
+    font-weight: bold;
+    letter-spacing: .4pt;
+    color: #334155;
+}
+
+/* small uppercase caption above a block */
+.pf-inv-cap {
+    margin-bottom: 1mm;
+    font-size: 6.5pt;
+    font-weight: bold;
+    letter-spacing: .8pt;
+    text-transform: uppercase;
+    color: #64748b;
+}
+
+/* customer box + document box */
+.pf-inv-boxes {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+.pf-inv-boxes td.pf-inv-box {
+    height: 30mm;
+    padding: 2mm 3mm;
+    vertical-align: top;
+    border: 1px solid #94a3b8;
+    border-radius: 2.5mm;
+}
+.pf-inv-boxes td.pf-inv-docbox {
+    width: 68mm;
+    background: #f8fafc;
+}
+.pf-inv-boxes td.pf-gap {
+    width: 3mm;
+    border: none;
+}
+.pf-inv-cust {
+    margin-bottom: 1.5mm;
+    font-size: 10.5pt;
+    font-weight: bold;
+}
+.pf-inv-kv {
+    width: 100%;
+    border-collapse: collapse;
+}
+.pf-inv-kv td {
+    padding: .5mm 0;
+    vertical-align: baseline;
+}
+.pf-inv-kv td.pf-k {
+    width: 24mm;
+    color: #475569;
+}
+.pf-inv-kv td.pf-sep {
+    width: 3mm;
+    color: #475569;
+}
+.pf-inv-kv td.pf-v {
+    font-weight: bold;
+}
+.pf-inv-kv tr.pf-inv-no td.pf-v {
+    font-size: 11pt;
+    color: #0f172a;
+}
+
+/* item table — dark heading band, light column lines */
+.pf-items.pf-inv-items {
+    margin-top: 3mm;
+    border: 1px solid #334155;
+}
+.pf-inv-items td.wrap {
+    white-space: normal;
+    word-wrap: break-word;
+}
+.pf-inv-items th {
+    height: 7mm;
+    padding: 0 1.2mm;
+    font-size: 8pt;
+    color: #fff;
+    background: #1e293b;
+    border: 1px solid #1e293b;
+    border-left-color: #475569;
+    border-right-color: #475569;
+}
+/* row = 4.6mm content + .9mm padding = 5.5mm; wrapped description lines add 4mm each */
+.pf-inv-items td {
+    height: 4.6mm;
+    padding: .7mm 1.2mm .2mm;
+    line-height: 4mm;
+    border-left: 1px solid #cbd5e1;
+    border-right: 1px solid #cbd5e1;
+}
+.pf-inv-items tr.pf-total td {
+    height: 7mm;
+    padding: 0 1.2mm;
+    background: #f1f5f9;
+    border: 1px solid #334155;
+    border-left-color: #cbd5e1;
+    border-right-color: #cbd5e1;
+}
+
+/* amount in words + VAT / Net Total */
+.pf-inv-sum {
+    width: 100%;
+    margin-top: 2mm;
+    border-collapse: collapse;
+}
+.pf-inv-sum td {
+    height: 7mm;
+    vertical-align: middle;
+}
+.pf-inv-sum td.pf-inv-words {
+    padding: 1.5mm 3mm 1.5mm 0;
+    vertical-align: top;
+}
+.pf-inv-words-text {
+    font-size: 8.5pt;
+    font-weight: bold;
+}
+.pf-inv-dono {
+    margin-top: 2mm;
+    color: #334155;
+}
+.pf-inv-sum td.pf-inv-sum-k {
+    width: 28mm;
+    padding: 0 2.5mm;
+    font-weight: bold;
+    border: 1px solid #94a3b8;
+    border-bottom: none;
+}
+.pf-inv-sum td.pf-inv-sum-v {
+    width: 29mm;
+    padding: 0 2mm;
+    font-weight: bold;
+    text-align: right;
+    border: 1px solid #94a3b8;
+    border-bottom: none;
+}
+.pf-inv-sum tr.pf-inv-net td.pf-inv-sum-k,
+.pf-inv-sum tr.pf-inv-net td.pf-inv-sum-v {
+    font-size: 10pt;
+    color: #fff;
+    background: #1e293b;
+    border-color: #1e293b;
+}
+
+.pf-inv-notes {
+    margin-top: 4mm;
+    text-align: center;
+    font-size: 8.5pt;
+    line-height: 1.45;
+    color: #334155;
+}
+
+/* signature lines */
+.pf-inv-sign {
+    width: 100%;
+    margin-top: 10mm;
+    border-collapse: collapse;
+}
+.pf-inv-sign td {
+    width: 60mm;
+    padding-top: 1.2mm;
+    text-align: center;
+    font-weight: bold;
+    border-top: 1px solid #334155;
+}
+.pf-inv-sign td.pf-gap {
+    width: auto;
+    border-top: none;
+}
+.pf-inv-body .pf-pageno {
+    margin-top: 2mm;
+    font-size: 8pt;
+    color: #475569;
+}

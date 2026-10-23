@@ -1,0 +1,858 @@
+/* ============================================================
+   DO Dispatch — Custom Stylesheet
+   File  : modules/do_dispatch/css/do_dispatch.css
+   Scope : Delivery Order Dispatch page only
+   Rules : No inline CSS, no Tailwind, labels live in PHP only
+   ============================================================ */
+
+/* ── 1. CSS Custom Properties ───────────────────────────────── */
+:root {
+    --dod-font:              'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+    /* Brand blues */
+    --dod-primary:           #2563eb;
+    --dod-primary-dark:      #1e40af;
+    --dod-primary-hover:     #1d4ed8;
+    --dod-primary-bg:        #eff6ff;
+    --dod-primary-border:    #bfdbfe;
+
+    /* Status — Pending Signature (amber/orange) */
+    --dod-pending-text:      #92400e;
+    --dod-pending-bg:        #fffbeb;
+    --dod-pending-border:    #fde68a;
+    --dod-pending-dot:       #d97706;
+
+    /* Status — Signed (green) */
+    --dod-signed-text:       #14532d;
+    --dod-signed-bg:         #f0fdf4;
+    --dod-signed-border:     #bbf7d0;
+    --dod-signed-dot:        #16a34a;
+
+    /* Status — Printed (blue) */
+    --dod-printed-text:      #1e40af;
+    --dod-printed-bg:        #eff6ff;
+    --dod-printed-border:    #bfdbfe;
+    --dod-printed-dot:       #2563eb;
+
+    /* Status — Dispatched (teal) */
+    --dod-dispatched-text:   #134e4a;
+    --dod-dispatched-bg:     #f0fdfa;
+    --dod-dispatched-border: #99f6e4;
+    --dod-dispatched-dot:    #0d9488;
+
+    /* Danger / delay */
+    --dod-danger:            #dc2626;
+    --dod-danger-bg:         #fef2f2;
+    --dod-danger-border:     #fecaca;
+
+    /* Neutrals */
+    --dod-text-heading:      #111827;
+    --dod-text-body:         #374151;
+    --dod-text-muted:        #6b7280;
+    --dod-text-subtle:       #9ca3af;
+    --dod-border:            #e5e7eb;
+    --dod-border-table:      #f3f4f6;
+    --dod-bg-page:           #f5f7fa;
+    --dod-bg-card:           #ffffff;
+    --dod-bg-thead:          #f8fafc;
+    --dod-bg-row-even:       #fafafa;
+    --dod-bg-row-hover:      #f0f7ff;
+
+    /* Radii & shadows */
+    --dod-radius-sm:         6px;
+    --dod-radius-md:         10px;
+    --dod-radius-lg:         14px;
+    --dod-shadow-sm:         0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+    --dod-shadow-card:       0 2px 10px rgba(0,0,0,0.07), 0 1px 3px rgba(0,0,0,0.04);
+    --dod-shadow-search:     0 4px 16px rgba(37,99,235,0.10);
+
+    /* Spacing */
+    --dod-gap-xs:            6px;
+    --dod-gap-sm:            10px;
+    --dod-gap-md:            16px;
+    --dod-gap-lg:            24px;
+    --dod-gap-xl:            32px;
+}
+
+/* ── 2. Base Reset ──────────────────────────────────────────── */
+.dod-page *,
+.dod-page *::before,
+.dod-page *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+.dod-page {
+    font-family: var(--dod-font);
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--dod-text-body);
+    background-color: var(--dod-bg-page);
+    min-height: 100vh;
+    padding: var(--dod-gap-md);
+}
+
+/* ── 3. Main Container ──────────────────────────────────────── */
+.dod-container {
+    max-width: 1140px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: var(--dod-gap-lg);
+}
+
+/* ── 4. Page Header ─────────────────────────────────────────── */
+.dod-page-header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--dod-gap-md);
+}
+
+.dod-header-left {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.dod-title {
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--dod-text-heading);
+    letter-spacing: -0.4px;
+    line-height: 1.2;
+}
+
+.dod-subtitle {
+    font-size: 13px;
+    color: var(--dod-text-muted);
+    font-weight: 400;
+}
+
+.dod-subtitle strong {
+    color: var(--dod-primary);
+    font-weight: 600;
+}
+
+/* Stats row (top-right) */
+.dod-stats {
+    display: flex;
+    align-items: center;
+    gap: var(--dod-gap-md);
+    flex-shrink: 0;
+}
+
+.dod-stat-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--dod-text-muted);
+    white-space: nowrap;
+}
+
+.dod-stat-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.dod-stat-dot--active   { background-color: var(--dod-primary); }
+.dod-stat-dot--pending  { background-color: var(--dod-danger); }
+
+/* ── 5. Search Card ─────────────────────────────────────────── */
+.dod-search-card {
+    background: var(--dod-bg-card);
+    border: 1px solid var(--dod-border);
+    border-radius: var(--dod-radius-lg);
+    padding: var(--dod-gap-md) var(--dod-gap-lg);
+    box-shadow: var(--dod-shadow-sm);
+}
+
+.dod-search-row {
+    display: flex;
+    align-items: center;
+    gap: var(--dod-gap-sm);
+}
+
+.dod-search-wrapper {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+}
+
+.dod-search-icon {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--dod-text-subtle);
+    font-size: 15px;
+    pointer-events: none;
+}
+
+.dod-search-input {
+    width: 100%;
+    height: 44px;
+    padding: 0 16px 0 42px;
+    border: 1.5px solid var(--dod-border);
+    border-radius: var(--dod-radius-md);
+    font-family: var(--dod-font);
+    font-size: 13.5px;
+    color: var(--dod-text-body);
+    background: var(--dod-bg-page);
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+}
+
+/* Fade table while AJAX is loading */
+.dod-table tbody {
+    transition: opacity 0.15s ease;
+}
+
+.dod-search-input::placeholder {
+    color: var(--dod-text-subtle);
+}
+
+.dod-search-input:focus {
+    border-color: var(--dod-primary);
+    background: var(--dod-bg-card);
+    box-shadow: var(--dod-shadow-search);
+}
+
+/* Active-filter label shown below search bar */
+.dod-search-active-label {
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--dod-text-muted);
+}
+
+.dod-search-active-label strong {
+    color: var(--dod-primary);
+}
+
+.dod-search-clear-link {
+    color: var(--dod-danger);
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.dod-search-clear-link:hover {
+    text-decoration: underline;
+}
+
+/* × clear button inside search input */
+.dod-search-clear {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 22px;
+    height: 22px;
+    border: none;
+    border-radius: 50%;
+    background: var(--dod-border);
+    color: var(--dod-text-muted);
+    font-size: 11px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, color 0.15s;
+    flex-shrink: 0;
+}
+
+.dod-search-clear:hover {
+    background: var(--dod-danger-bg);
+    color: var(--dod-danger);
+}
+
+/* "(filtered)" note in pagination info */
+.dod-pagination-filter-note {
+    font-size: 11px;
+    color: var(--dod-primary);
+    font-style: normal;
+    font-weight: 600;
+}
+
+/* Search / submit button */
+.dod-filter-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    height: 44px;
+    padding: 0 20px;
+    background: var(--dod-primary);
+    color: #ffffff;
+    border: none;
+    border-radius: var(--dod-radius-md);
+    font-family: var(--dod-font);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.2s, box-shadow 0.2s, transform 0.15s;
+    flex-shrink: 0;
+}
+
+.dod-filter-btn:hover {
+    background: var(--dod-primary-hover);
+    box-shadow: 0 4px 12px rgba(37,99,235,0.25);
+    transform: translateY(-1px);
+}
+
+.dod-filter-btn:active {
+    transform: translateY(0);
+    box-shadow: none;
+}
+
+/* ── 6. Table Card ──────────────────────────────────────────── */
+.dod-table-card {
+    background: var(--dod-bg-card);
+    border: 1px solid var(--dod-border);
+    border-radius: var(--dod-radius-lg);
+    box-shadow: var(--dod-shadow-card);
+    overflow: hidden;
+}
+
+/* Card title bar */
+.dod-table-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px var(--dod-gap-lg);
+    border-bottom: 1px solid var(--dod-border);
+    background: var(--dod-bg-card);
+}
+
+.dod-table-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--dod-text-heading);
+}
+
+.dod-table-card-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--dod-gap-xs);
+}
+
+.dod-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: var(--dod-radius-sm);
+    background: transparent;
+    color: var(--dod-text-muted);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+
+.dod-icon-btn:hover {
+    background: var(--dod-bg-page);
+    color: var(--dod-primary);
+}
+
+/* ── 7. Table ───────────────────────────────────────────────── */
+.dod-table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.dod-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13.5px;
+}
+
+/* Column widths */
+.dod-table colgroup col.col-no       { width: 160px; }
+.dod-table colgroup col.col-date     { width: 130px; }
+.dod-table colgroup col.col-customer { /* flexible */ }
+.dod-table colgroup col.col-status   { width: 180px; }
+.dod-table colgroup col.col-actions  { width: 120px; }
+
+/* Thead */
+.dod-table thead {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background: var(--dod-bg-thead);
+}
+
+.dod-table thead th {
+    padding: 10px 16px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--dod-text-muted);
+    border-bottom: 2px solid var(--dod-border);
+    white-space: nowrap;
+    user-select: none;
+}
+
+.dod-table thead th.th-center { text-align: center; }
+.dod-table thead th.th-right  { text-align: right; }
+
+/* Tbody rows */
+.dod-table tbody tr {
+    border-bottom: 1px solid var(--dod-border-table);
+    transition: background 0.15s;
+}
+
+.dod-table tbody tr:last-child {
+    border-bottom: none;
+}
+
+.dod-table tbody tr:nth-child(even) {
+    background: var(--dod-bg-row-even);
+}
+
+.dod-table tbody tr:hover {
+    background: var(--dod-bg-row-hover);
+}
+
+/* Delayed row highlight */
+.dod-table tbody tr.dod-row-delayed {
+    background: #fffbf0;
+}
+
+.dod-table tbody tr.dod-row-delayed:hover {
+    background: #fff4d6;
+}
+
+/* Tbody cells */
+.dod-table tbody td {
+    padding: 12px 16px;
+    color: var(--dod-text-body);
+    vertical-align: middle;
+}
+
+.dod-table tbody td.td-center { text-align: center; }
+.dod-table tbody td.td-right  { text-align: right; }
+
+/* ── 8. DO Number cell ──────────────────────────────────────── */
+.dod-doc-no-cell {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.dod-warning-icon {
+    color: var(--dod-danger);
+    font-size: 15px;
+    flex-shrink: 0;
+    line-height: 1;
+}
+
+.dod-doc-no-link {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--dod-primary);
+    letter-spacing: 0.02em;
+    text-decoration: none;
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+    transition: color 0.15s;
+}
+
+.dod-doc-no-link:hover {
+    color: var(--dod-primary-dark);
+    text-decoration: underline;
+}
+
+/* ── 9. Date cell ───────────────────────────────────────────── */
+.dod-date-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    line-height: 1.3;
+}
+
+.dod-date-text {
+    font-size: 13px;
+    color: var(--dod-text-body);
+}
+
+.dod-delay-badge {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--dod-danger);
+    background: var(--dod-danger-bg);
+    border: 1px solid var(--dod-danger-border);
+    border-radius: 4px;
+    padding: 1px 5px;
+    line-height: 1.5;
+}
+
+/* ── 10. Customer cell ──────────────────────────────────────── */
+.dod-customer-name {
+    font-size: 13.5px;
+    font-weight: 500;
+    color: var(--dod-text-heading);
+}
+
+/* ── 11. Status Badges ──────────────────────────────────────── */
+.dod-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    border: 1px solid transparent;
+    white-space: nowrap;
+}
+
+.dod-badge-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+/* Pending Signature */
+.dod-badge-pending {
+    color: var(--dod-pending-text);
+    background: var(--dod-pending-bg);
+    border-color: var(--dod-pending-border);
+}
+
+.dod-badge-pending .dod-badge-dot { background: var(--dod-pending-dot); }
+
+/* Signed */
+.dod-badge-signed {
+    color: var(--dod-signed-text);
+    background: var(--dod-signed-bg);
+    border-color: var(--dod-signed-border);
+}
+
+.dod-badge-signed .dod-badge-dot { background: var(--dod-signed-dot); }
+
+/* Printed */
+.dod-badge-printed {
+    color: var(--dod-printed-text);
+    background: var(--dod-printed-bg);
+    border-color: var(--dod-printed-border);
+}
+
+.dod-badge-printed .dod-badge-dot { background: var(--dod-printed-dot); }
+
+/* Dispatched */
+.dod-badge-dispatched {
+    color: var(--dod-dispatched-text);
+    background: var(--dod-dispatched-bg);
+    border-color: var(--dod-dispatched-border);
+}
+
+.dod-badge-dispatched .dod-badge-dot { background: var(--dod-dispatched-dot); }
+
+/* ── 12. Action Buttons ─────────────────────────────────────── */
+.dod-actions-cell {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 4px;
+}
+
+.dod-action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border: 1px solid transparent;
+    border-radius: var(--dod-radius-sm);
+    background: transparent;
+    color: var(--dod-text-muted);
+    cursor: pointer;
+    font-size: 13px;
+    transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.1s;
+}
+
+.dod-action-btn:hover {
+    background: var(--dod-primary-bg);
+    color: var(--dod-primary);
+    border-color: var(--dod-primary-border);
+    transform: translateY(-1px);
+}
+
+.dod-action-btn:active {
+    transform: translateY(0);
+}
+
+/* Dispatch button (send) — highlighted */
+.dod-action-btn--dispatch:hover {
+    background: var(--dod-primary);
+    color: #ffffff;
+    border-color: var(--dod-primary);
+}
+
+/* ── 13. Table Footer / Pagination ──────────────────────────── */
+.dod-table-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--dod-gap-md);
+    padding: 12px var(--dod-gap-lg);
+    border-top: 1px solid var(--dod-border);
+    background: var(--dod-bg-card);
+}
+
+.dod-pagination-info {
+    font-size: 12.5px;
+    color: var(--dod-text-muted);
+    font-weight: 500;
+}
+
+.dod-pagination {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.dod-page-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+    height: 32px;
+    padding: 0 8px;
+    border: 1px solid var(--dod-border);
+    border-radius: var(--dod-radius-sm);
+    background: var(--dod-bg-card);
+    color: var(--dod-text-body);
+    font-family: var(--dod-font);
+    font-size: 12.5px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+    gap: 4px;
+}
+
+.dod-page-btn:hover {
+    background: var(--dod-primary-bg);
+    border-color: var(--dod-primary-border);
+    color: var(--dod-primary);
+}
+
+.dod-page-btn--active {
+    background: var(--dod-primary);
+    border-color: var(--dod-primary);
+    color: #ffffff;
+    font-weight: 700;
+    cursor: default;
+}
+
+.dod-page-btn--active:hover {
+    background: var(--dod-primary);
+    color: #ffffff;
+    border-color: var(--dod-primary);
+}
+
+.dod-page-btn--disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.dod-page-ellipsis {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 28px;
+    height: 32px;
+    font-size: 13px;
+    color: var(--dod-text-subtle);
+    user-select: none;
+}
+
+.dod-page-btn--nav {
+    color: var(--dod-text-muted);
+    gap: 4px;
+}
+
+.dod-page-btn--nav:hover {
+    color: var(--dod-primary);
+}
+
+/* ── 13b. DB Error Banner ───────────────────────────────────── */
+.dod-db-error {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: var(--dod-gap-md) var(--dod-gap-lg);
+    padding: 10px 14px;
+    background: var(--dod-danger-bg);
+    border: 1px solid var(--dod-danger-border);
+    border-radius: var(--dod-radius-md);
+    color: var(--dod-danger);
+    font-size: 13px;
+    font-weight: 500;
+}
+
+/* ── 14. Empty State ────────────────────────────────────────── */
+.dod-empty-state {
+    text-align: center;
+    padding: 52px 24px;
+    color: var(--dod-text-subtle);
+}
+
+.dod-empty-state-icon {
+    font-size: 40px;
+    margin-bottom: 12px;
+    opacity: 0.4;
+}
+
+.dod-empty-state-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--dod-text-muted);
+    margin-bottom: 6px;
+}
+
+.dod-empty-state-text {
+    font-size: 13px;
+    color: var(--dod-text-subtle);
+}
+
+/* ── 15. Responsive ─────────────────────────────────────────── */
+@media (max-width: 900px) {
+    .dod-page-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .dod-title {
+        font-size: 22px;
+    }
+
+    .dod-table-card-header {
+        padding: 12px var(--dod-gap-md);
+    }
+
+    .dod-table thead th,
+    .dod-table tbody td {
+        padding: 10px 12px;
+    }
+}
+
+@media (max-width: 640px) {
+    .dod-page {
+        padding: 10px;
+    }
+
+    .dod-title {
+        font-size: 19px;
+    }
+
+    .dod-search-card {
+        padding: var(--dod-gap-sm) var(--dod-gap-md);
+    }
+
+    .dod-search-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .dod-filter-btn {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .dod-table-footer {
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .dod-stats {
+        gap: var(--dod-gap-sm);
+    }
+
+    /* Back · Pending Dispatch · Refresh wrap instead of running off the screen */
+    .dod-page .dod-page-header > div + div {
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-left: 0;
+    }
+
+    /* Hide date on very small screens */
+    .dod-col-date { display: none; }
+
+    .dod-table thead th,
+    .dod-table tbody td {
+        padding: 9px 10px;
+        font-size: 12px;
+    }
+
+    .dod-table {
+        font-size: 12px;
+    }
+}
+
+/* ── 16. Utility helpers ────────────────────────────────────── */
+.dod-spacer-icon {
+    display: inline-block;
+    width: 16px;
+    flex-shrink: 0;
+}
+
+/* ── 17. Popups (frame and buttons come from assets/css/erp_search.css) ── */
+.dod-sign-pad {
+    position: relative;
+    height: 160px;
+    overflow: hidden;
+    background: #f8fafc;
+    border: 1.5px dashed #a5b4e3;
+    border-radius: 10px;
+}
+.dod-sign-pad canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    cursor: crosshair;
+}
+.dod-sign-pad-hint {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    color: #94a3b8;
+    pointer-events: none;
+}
+.dod-sign-pad-hint i { font-size: 22px; color: #cbd5e1; }
+.dod-sign-time {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    font-size: 12.5px;
+    color: #475569;
+}
+.dod-sign-time i { color: #4a6cd4; }
+.erp-search-field.border-red-400 { border-color: #f87171; box-shadow: 0 0 0 3px rgba(248, 113, 113, .18); }
+.dod-send-emails { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+.dod-send-emails label { display: flex; align-items: flex-start; gap: 8px; margin: 0; font-size: 13px; color: #0f172a; cursor: pointer; }
+.dod-send-emails input[type="checkbox"] { margin-top: 3px; accent-color: #4a6cd4; }
+.dod-send-emails span { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: #4a6cd4; word-break: break-all; }
+.dod-send-email-row { display: flex; gap: 8px; }
+.dod-send-email-row .erp-search-field { flex: 1 1 auto; min-width: 0; }

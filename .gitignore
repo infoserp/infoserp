@@ -1,0 +1,67 @@
+# Secrets / local environment
+config.local.php
+.env
+.env.*
+!.env.example
+
+# External mail / Graph secrets
+Approval_config/
+**/do_mail_config.php
+!**/do_mail_config.example.php
+
+# Composer
+/vendor/
+
+# Uploads and runtime data
+/DOCUMENTS/
+/Data/
+/uploads/
+/tmp/
+/temp/
+*.log
+
+# Backup and scratch files
+*.bak
+*.bak.html
+*.bak.php
+*.bak.css
+*.bak.js
+*.pre-*.bak
+*.pre-*.bak.*
+*.pre-*.php
+*.pre-*.css
+*.pre-*.js
+*.pre-*.html
+*~
+*.swp
+*.tmp
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Accidental duplicate copies
+* copy.php
+* copy.html
+
+# IDE / tooling
+.settings/
+.project
+.buildpath
+.idea/
+*.sublime-project
+*.sublime-workspace
+.phpunit.result.cache
+
+# VS Code (keep shared examples only)
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json.example
+
+# Explicit junk paths (names with spaces / odd suffixes)
+/approvalmenu copy.php
+/get_open_jobs copy.php
+/sales_invoice_d_01 copy.php
+/view_po_attachment copy.php
+/modules/invoice_copy.php
+/prototype/sales_invoice_redesign.brand.bak.html
+/prototype/sales_invoice_redesign.pre-palette.bak.html
