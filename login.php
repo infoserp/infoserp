@@ -1,3 +1,111 @@
+<?php
+/**
+ * Login — authenticate against branch_user.login_password (app user),
+ * connect to SQL with the service account from config.local.php.
+ * POST handling runs before any HTML so erp_redirect() can send Location headers.
+ */
+if (session_status() !== PHP_SESSION_ACTIVE) {
+    session_start();
+}
+
+function erp_login_error_html($message)
+{
+    require_once __DIR__ . '/includes/erp_paths.php';
+    $msg = htmlspecialchars($message, ENT_QUOTES, 'UTF-8');
+    $url = htmlspecialchars(erp_url('login'), ENT_QUOTES, 'UTF-8');
+    return "<div class='login-error-shell min-h-screen flex items-center justify-center p-6'>"
+        . "<div class='login-card login-alert w-full max-w-md rounded-2xl p-8 text-center'>"
+        . "<div class='flex justify-center mb-4'><span class='w-12 h-12 rounded-full bg-red-100 flex items-center justify-center'>"
+        . "<i class='fa fa-exclamation-circle text-red-500 text-xl' aria-hidden='true'></i></span></div>"
+        . "<h3 class='text-lg font-bold text-red-800 mb-2'>{$msg}</h3>"
+        . "<p class='text-sm text-red-700/80'>Click here to <a href='{$url}'>Login</a></p>"
+        . "</div></div>";
+}
+
+$loginErrorHtml = '';
+
+if (isset($_POST['username'])) {
+    $username = strtoupper(trim(stripslashes((string) ($_POST['username'] ?? ''))));
+    $password = (string) ($_POST['password'] ?? '');
+
+    if ($username === '' || $password === '') {
+        $loginErrorHtml = erp_login_error_html('Username and password are required.');
+    } else {
+        unset($_SESSION['dbusername'], $_SESSION['dbpwd'], $_SESSION['db_pwd']);
+
+        $s = '';
+        require __DIR__ . '/db.php';
+
+        if ($s !== 'F' && isset($con) && $con instanceof PDO) {
+            require_once __DIR__ . '/includes/erp_auth.php';
+            require_once __DIR__ . '/includes/erp_paths.php';
+
+            $erpConfig = [];
+            $cfgFile = __DIR__ . '/config.local.php';
+            if (!is_readable($cfgFile)) {
+                $cfgFile = __DIR__ . '/config.local.example.php';
+            }
+            if (is_readable($cfgFile)) {
+                $loaded = require $cfgFile;
+                if (is_array($loaded)) {
+                    $erpConfig = $loaded;
+                }
+            }
+
+            $allowedTypes = erp_auth_allowed_user_types($erpConfig);
+            $row = erp_auth_find_user($con, $username);
+
+            $ok = false;
+            $failMsg = 'Username/password is incorrect.';
+
+            if ($row) {
+                $userType = strtoupper(trim((string) ($row['user_type'] ?? '')));
+                $storedPwd = (string) ($row['login_password'] ?? '');
+
+                if ($userType === '' || !in_array($userType, $allowedTypes, true)) {
+                    $failMsg = 'This user type is not allowed to sign in.';
+                } elseif ($storedPwd === '') {
+                    $failMsg = 'No login password is set for this user. Ask an administrator to set login_password.';
+                } elseif (!erp_password_verify($password, $storedPwd)) {
+                    $failMsg = 'Username/password is incorrect.';
+                } else {
+                    $ok = true;
+                }
+            }
+
+            if ($ok) {
+                $_SESSION['username'] = $username;
+                $_SESSION['user_type'] = strtoupper(trim((string) $row['user_type']));
+                $_SESSION['user_name'] = trim((string) ($row['user_name'] ?? $username));
+                $_SESSION['allow_allbranch'] = strtoupper(trim((string) ($row['allow_allbranch'] ?? 'N'))) === 'Y' ? 'Y' : 'N';
+
+                if (($erpConfig['rehash_login_password_on_login'] ?? true)
+                    && erp_password_needs_rehash($row['login_password'] ?? '')
+                ) {
+                    erp_auth_upgrade_login_password($con, $username, $password);
+                }
+
+                try {
+                    $con->prepare(
+                        "UPDATE branch_user
+                         SET login_count = ISNULL(login_count, 0) + 1,
+                             last_userid = ?,
+                             last_userdate = GETDATE()
+                         WHERE user_id = ?"
+                    )->execute([$username, $username]);
+                } catch (Exception $e) {
+                    error_log('login login_count update: ' . $e->getMessage());
+                }
+
+                erp_redirect('branchselection');
+            }
+
+            $loginErrorHtml = erp_login_error_html($failMsg);
+        }
+        // If $s === 'F', db.php already printed the connection error and exited.
+    }
+}
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -14,54 +122,9 @@
 </head>
 <body class="login-body">
 <?php
-
-    if (isset($_POST['username'])   ){
-
-		$username=$_POST['username'];
-		$password=$_POST['password'];
-		$username = trim(stripslashes($username));
-		$password = stripslashes($password);
-
-		 session_start();
-		  $_SESSION["dbusername"]  = $username;
-		  $_SESSION["dbpwd"]  = $password ;
-		  $s="";
-		 include('db.php');
-
-		 if($s<>"F")
-		 {
-			  $QUERY="SELECT  user_id,   branch_master.company_code 
-				 FROM            
-										 branch_user   INNER JOIN
-										 branch_master ON branch_user.branch_code = branch_master.branch_code
-				WHERE        ( user_id = ?)";
-
-				 $result = $con->prepare($QUERY);
-				 $result->execute(array($username));
-				 $records = $result->fetch();
-
-				if($records)
-				{
-					 $_SESSION["username"]  = $username;
-
-					require_once __DIR__ . '/includes/erp_paths.php';
-					erp_redirect('branchselection');
-
-				 } 
-				 else
-				 {
-					 echo "<div class='login-error-shell min-h-screen flex items-center justify-center p-6'>";
-					 echo "<div class='login-card login-alert w-full max-w-md rounded-2xl p-8 text-center'>";
-					 echo "<div class='flex justify-center mb-4'><span class='w-12 h-12 rounded-full bg-red-100 flex items-center justify-center'><i class='fa fa-exclamation-circle text-red-500 text-xl' aria-hidden='true'></i></span></div>";
-					 echo "<h3 class='text-lg font-bold text-red-800 mb-2'>Username/password is incorrect.</h3>";
-					 require_once __DIR__ . '/includes/erp_paths.php';
-					 echo "<p class='text-sm text-red-700/80'>Click here to <a href='" . htmlspecialchars(erp_url('login'), ENT_QUOTES, 'UTF-8') . "'>Login</a></p>";
-					 echo "</div></div>";
-				 }
-		}
-    }
-	else
-	{
+if ($loginErrorHtml !== '') {
+    echo $loginErrorHtml;
+} else {
 ?>
 <div class="login-shell">
 
@@ -134,7 +197,7 @@
                 name="password"
                 id="password"
                 type="password"
-                onkeyup="this.value = this.value.toUpperCase();">
+                autocomplete="current-password">
               <button type="button" id="toggle-password" class="login-toggle-pwd"
                 aria-label="Show password" title="Show password">
                 <i class="fa fa-eye" aria-hidden="true"></i>

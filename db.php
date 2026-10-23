@@ -19,11 +19,16 @@ $server   = $erpConfig['db_server']   ?? 'localhost';
 $database = $erpConfig['db_database'] ?? '';
 $trustCert = !empty($erpConfig['db_trust_server_certificate']);
 
-// Prefer fixed credentials from config.local.php when set; otherwise session (login form)
+// App login uses branch_user.login_password. SQL Server must use a service account
+// from config.local.php (db_username / db_password). Session fallback is legacy only.
 $configUser = trim((string) ($erpConfig['db_username'] ?? ''));
 $configPass = (string) ($erpConfig['db_password'] ?? '');
-$user     = $configUser !== '' ? $configUser : ($_SESSION['dbusername'] ?? '');
-$password = $configUser !== '' ? $configPass : ($_SESSION['dbpwd'] ?? '');
+$user     = $configUser !== '' ? $configUser : trim((string) ($_SESSION['dbusername'] ?? ''));
+$password = $configUser !== '' ? $configPass : (string) ($_SESSION['dbpwd'] ?? '');
+
+if ($configUser === '' && $user === '') {
+	error_log('db.php: set db_username / db_password in config.local.php (SQL service account).');
+}
 
 $tz = $erpConfig['timezone'] ?? 'Asia/Dubai';
 date_default_timezone_set($tz);

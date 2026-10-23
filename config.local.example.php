@@ -4,32 +4,37 @@
  *
  * Setup:
  *   1. Copy this file to config.local.php in the project root
- *   2. Fill in cloud / local SQL Server details
+ *   2. Fill in SQL Server + service account details
  *   3. Never commit config.local.php (it is in .gitignore)
+ *   4. Run sql/alter_branch_user_login_password.sql once (widen login_password)
  *
- * db.php loads config.local.php for server + database.
- * Login still uses the SQL username/password from the login form (session),
- * unless you set db_username / db_password below for a fixed service account.
+ * App users sign in with branch_user.user_id + branch_user.login_password.
+ * The SQL connection always uses db_username / db_password below (service account).
  */
 return [
-    // ── SQL Server ──────────────────────────────────────────────────────────
+    // ── SQL Server (service account) ────────────────────────────────────────
     // Cloud example:
-    'db_server'   => 'infoserp.dyndns.org',
+    'db_server'   => 'den1.mssql8.gear.host',
     'db_database' => 'infos',
 
     // Local example (comment cloud lines above and use these instead):
     // 'db_server'   => 'DESKTOP-GP23B1O\\MSSQL2024',
     // 'db_database' => 'van',
 
-    // Required for most self-signed / private cloud SQL TLS setups
     'db_trust_server_certificate' => true,
 
-    // Optional fixed DB login (leave empty to use $_SESSION from login.php)
-    'db_username' => '',
+    // Required — SQL Server login used by the PHP app (not the ERP user password)
+    'db_username' => 'infos',
     'db_password' => '',
 
+    // ── App login ───────────────────────────────────────────────────────────
+    // branch_user.user_type values allowed to sign in (A=Admin, U=User)
+    'allowed_user_types' => ['A', 'U'],
+
+    // On successful login, upgrade plain-text login_password to password_hash()
+    'rehash_login_password_on_login' => true,
+
     // ── App ─────────────────────────────────────────────────────────────────
-    // Web root for static assets ('/' when site is at http://host:8050/)
     'erp_web_root' => '/',
     'timezone'     => 'Asia/Dubai',
 ];
