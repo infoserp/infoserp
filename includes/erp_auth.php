@@ -7,15 +7,22 @@
 if (!function_exists('erp_password_is_hashed')) {
     /**
      * Detect bcrypt / argon2 hashes produced by password_hash().
+     * Also matches $2y$ / $2a$ / $2b$ by prefix (SSMS paste can confuse some PHP builds).
      */
     function erp_password_is_hashed($stored)
     {
-        $stored = (string) $stored;
+        $stored = trim((string) $stored);
         if ($stored === '') {
             return false;
         }
-        $info = password_get_info($stored);
-        return !empty($info['algo']);
+        if (preg_match('/^\$2[ayb]\$\d{2}\$/', $stored) === 1 && strlen($stored) >= 59) {
+            return true;
+        }
+        if (function_exists('password_get_info')) {
+            $info = password_get_info($stored);
+            return !empty($info['algo']);
+        }
+        return false;
     }
 }
 
@@ -30,6 +37,9 @@ if (!function_exists('erp_password_verify')) {
     {
         $plain  = (string) $plain;
         $stored = trim((string) $stored);
+        // Strip UTF-8 BOM / stray NULs that SSMS / copy-paste sometimes leave in the column
+        $stored = preg_replace('/^\xEF\xBB\xBF/', '', $stored);
+        $stored = str_replace("\0", '', $stored);
         if ($stored === '') {
             return false;
         }

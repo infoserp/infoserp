@@ -1,14 +1,8 @@
 <?php
 @session_start();
 
-$configFile = __DIR__ . '/config.local.php';
-if (!is_readable($configFile)) {
-	$configFile = __DIR__ . '/config.local.example.php';
-}
-$erpConfig = is_readable($configFile) ? (require $configFile) : [];
-if (!is_array($erpConfig)) {
-	$erpConfig = [];
-}
+require_once __DIR__ . '/includes/erp_config.php';
+$erpConfig = erp_load_config();
 
 // Web root for static assets (use '/' when app is at site root, e.g. http://host:8050/)
 if (!defined('ERP_WEB_ROOT')) {

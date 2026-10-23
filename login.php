@@ -26,7 +26,8 @@ $loginErrorHtml = '';
 
 if (isset($_POST['username'])) {
     $username = strtoupper(trim(stripslashes((string) ($_POST['username'] ?? ''))));
-    $password = (string) ($_POST['password'] ?? '');
+    // Trim — paste from SSMS/email often adds spaces; do not change case of password
+    $password = trim((string) ($_POST['password'] ?? ''));
 
     if ($username === '' || $password === '') {
         $loginErrorHtml = erp_login_error_html('Username and password are required.');
@@ -39,18 +40,9 @@ if (isset($_POST['username'])) {
         if ($s !== 'F' && isset($con) && $con instanceof PDO) {
             require_once __DIR__ . '/includes/erp_auth.php';
             require_once __DIR__ . '/includes/erp_paths.php';
+            require_once __DIR__ . '/includes/erp_config.php';
 
-            $erpConfig = [];
-            $cfgFile = __DIR__ . '/config.local.php';
-            if (!is_readable($cfgFile)) {
-                $cfgFile = __DIR__ . '/config.local.example.php';
-            }
-            if (is_readable($cfgFile)) {
-                $loaded = require $cfgFile;
-                if (is_array($loaded)) {
-                    $erpConfig = $loaded;
-                }
-            }
+            $erpConfig = erp_load_config();
 
             $allowedTypes = erp_auth_allowed_user_types($erpConfig);
             $row = erp_auth_find_user($con, $username);
