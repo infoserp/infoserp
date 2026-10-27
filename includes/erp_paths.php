@@ -54,6 +54,20 @@ if (!function_exists('erp_asset_v')) {
     }
 }
 
+if (!function_exists('erp_font_awesome_href')) {
+    /**
+     * Local Font Awesome 4 if vendor/ is deployed; otherwise CDN so icons never 404.
+     */
+    function erp_font_awesome_href() {
+        $rel = 'vendor/font-awesome/css/font-awesome.min.css';
+        $abs = dirname(__DIR__) . '/' . $rel;
+        if (is_file($abs)) {
+            return erp_asset_v($rel);
+        }
+        return 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css';
+    }
+}
+
 if (!function_exists('erp_url')) {
     function erp_url($route) {
         $route = str_replace('\\', '/', (string) $route);

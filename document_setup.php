@@ -198,6 +198,24 @@ $saved_print_map = [];
 // doc_code → module folder, found from the saved header/detail file of that code
 $doc_folder_map  = [];
 $module_dirs     = glob(__DIR__ . '/modules/*', GLOB_ONLYDIR) ?: [];
+$module_by_name  = [];
+foreach ($module_dirs as $dir) {
+    $module_by_name[basename($dir)] = $dir;
+}
+
+// Known doc_code → modules/<folder> (used when no saved row yet)
+$doc_code_module_map = [
+    'JC'  => 'job_card',
+    'SQ'  => 'sales_quot',
+    'SI'  => 'invoice',
+    'MR'  => 'material_request',
+    'MRQ' => 'material_request',
+    'RV'  => 'receipt',
+    'TI'  => 'stock_transfer_in',
+    'TO'  => 'stock_transfer_out',
+    'DD'  => 'do_dispatch',
+];
+
 foreach ($documents as $doc) {
     $code = trim($doc['doc_code']);
     $saved_type_map[$code][] = trim($doc['doc_type']);
@@ -217,6 +235,18 @@ foreach ($documents as $doc) {
     }
 }
 
+// Resolve module folders for every known doc_code (saved + mapped)
+foreach ($doc_codes as $code) {
+    $code = trim((string) $code);
+    if ($code === '' || isset($doc_folder_map[$code])) {
+        continue;
+    }
+    $hint = $doc_code_module_map[$code] ?? '';
+    if ($hint !== '' && isset($module_by_name[$hint])) {
+        $doc_folder_map[$code] = $module_by_name[$hint];
+    }
+}
+
 // doc_code → ['header' => [...], 'detail' => [...], 'print' => [...]] file names without .php
 $doc_file_map = [];
 foreach ($doc_folder_map as $code => $dir) {
@@ -229,19 +259,18 @@ foreach ($doc_folder_map as $code => $dir) {
     }
 }
 
-// module folder name → ['header' => [...], 'detail' => [...], 'print' => [...]]
-// offered for codes that have no saved row yet, so their module cannot be resolved
+// Flat fallback list (no folder/optgroup structure) for unresolved codes
 $module_file_map = [];
-foreach ($module_dirs as $dir) {
-    foreach (['header' => 'header', 'detail' => 'detail', 'print' => 'print_format'] as $kind => $folder) {
-        $names = array_map(function ($path) {
-            return basename($path, '.php');
-        }, glob($dir . '/' . $folder . '/*.php') ?: []);
-        sort($names);
-        if ($names) {
-            $module_file_map[basename($dir)][$kind] = $names;
+foreach (['header' => 'header', 'detail' => 'detail', 'print' => 'print_format'] as $kind => $folder) {
+    $names = [];
+    foreach ($module_dirs as $dir) {
+        foreach (glob($dir . '/' . $folder . '/*.php') ?: [] as $path) {
+            $names[] = basename($path, '.php');
         }
     }
+    $names = array_values(array_unique($names));
+    sort($names);
+    $module_file_map[$kind] = $names;
 }
 ?>
 <!DOCTYPE html>
@@ -725,11 +754,11 @@ foreach ($module_dirs as $dir) {
     var DOC_TYPE_MAP = <?php echo json_encode($doc_type_map); ?>;
     // doc_code → doc_types already saved in document_setup
     var SAVED_TYPE_MAP = <?php echo json_encode((object) $saved_type_map); ?>;
-    // doc_code → { header: [], detail: [], print: [] } existing file names (without .php)
+    // doc_code → { header: [], detail: [], print: [] } file names only (no path / no .php)
     var DOC_FILE_MAP = <?php echo json_encode((object) $doc_file_map); ?>;
     // doc_code → print files already saved (used while the module has no print files)
     var SAVED_PRINT_MAP = <?php echo json_encode((object) $saved_print_map); ?>;
-    // module folder → { header: [], detail: [], print: [] } for codes not yet linked to a module
+    // Flat fallback { header: [], detail: [], print: [] } — filenames only, no folders
     var MODULE_FILE_MAP = <?php echo json_encode((object) $module_file_map); ?>;
 
     // Types of this code that are saved, or picked in another row, are not offered again
@@ -745,7 +774,7 @@ foreach ($module_dirs as $dir) {
         return used;
     }
 
-    // Header / Detail / Print dropdowns list the module's existing files for the row's code
+    // Header / Detail / Print: basename only (no folder, no .php) for the selected doc_code
     function fillFileSelects(row) {
         var codeSelect = row.querySelector('select[name="doc_code[]"]');
         var code = codeSelect ? codeSelect.value : '';
@@ -753,30 +782,20 @@ foreach ($module_dirs as $dir) {
             var kind = sel.dataset.kind;
             var saved = sel.dataset.saved || '';
             var current = sel.value || saved;
-            var files = (code && DOC_FILE_MAP[code] && DOC_FILE_MAP[code][kind]) ? DOC_FILE_MAP[code][kind].slice() : [];
+            var files = (code && DOC_FILE_MAP[code] && DOC_FILE_MAP[code][kind])
+                ? DOC_FILE_MAP[code][kind].slice()
+                : [];
+            // Unknown codes: keep dropdown empty (no folder tree / cross-module list)
             if (kind === 'print' && files.length === 0) {
                 files = (SAVED_PRINT_MAP[code] || []).slice();
-                if (saved && files.indexOf(saved) === -1) files.push(saved);
             }
+            if (saved && files.indexOf(saved) === -1) files.push(saved);
+            files = files.map(function (f) {
+                return String(f || '').replace(/^.*[\\\/]/, '').replace(/\.php$/i, '');
+            }).filter(function (f, i, arr) {
+                return f !== '' && arr.indexOf(f) === i;
+            });
             var label = kind.charAt(0).toUpperCase() + kind.slice(1);
-            if (code && !DOC_FILE_MAP[code]) {
-                sel.innerHTML = '<option value="">' + label + '</option>';
-                Object.keys(MODULE_FILE_MAP).forEach(function (mod) {
-                    var modFiles = MODULE_FILE_MAP[mod][kind] || [];
-                    if (!modFiles.length) return;
-                    var group = document.createElement('optgroup');
-                    group.label = mod;
-                    modFiles.forEach(function (f) {
-                        var opt = document.createElement('option');
-                        opt.value = f;
-                        opt.textContent = f;
-                        if (f === current) opt.selected = true;
-                        group.appendChild(opt);
-                    });
-                    sel.appendChild(group);
-                });
-                return;
-            }
             sel.innerHTML = files.length === 1 ? '' : '<option value="">' + (code ? label : 'Select Code first') + '</option>';
             files.forEach(function (f) {
                 var opt = document.createElement('option');

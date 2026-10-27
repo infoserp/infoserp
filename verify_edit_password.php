@@ -19,8 +19,11 @@ if (!$password || !$user) {
     exit;
 }
 
-$sql = "SELECT edit_password FROM branch_user 
-        WHERE branch_code = ? 
+$sql = "SELECT edit_password,
+               ISNULL(allow_edit, 'N') AS allow_edit,
+               ISNULL(allow_delete, 'N') AS allow_delete
+        FROM branch_user
+        WHERE branch_code = ?
           AND user_id = ?
           AND user_type = 'A'";
 
@@ -31,7 +34,11 @@ $row = $stmt->fetch(PDO::FETCH_ASSOC);
 if ($row && isset($row['edit_password'])) {
     $db_pwd = trim($row['edit_password']);
     if ($db_pwd === trim($password)) {
-        echo json_encode(['success' => true]);
+        echo json_encode([
+            'success'      => true,
+            'allow_edit'   => strtoupper(trim((string) ($row['allow_edit'] ?? 'N'))),
+            'allow_delete' => strtoupper(trim((string) ($row['allow_delete'] ?? 'N'))),
+        ]);
         exit;
     }
 }

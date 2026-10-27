@@ -680,9 +680,9 @@ $rv_self_url = '/' . ltrim(
                             <label class="doc-lbl">Currency / Rate</label>
                             <div class="doc-inp-group">
                                 <?php if ($is_view_mode): ?>
-                                    <input type="text" name="currency" class="doc-inp" value="<?php echo htmlspecialchars($currency); ?>" readonly>
+                                    <input type="text" name="currency" class="doc-inp doc-currency" value="<?php echo htmlspecialchars($currency); ?>" readonly maxlength="4">
                                 <?php else: ?>
-                                    <select id="currencySelect" class="doc-inp" onchange="onCurrencyChange(this)">
+                                    <select id="currencySelect" class="doc-inp doc-currency" onchange="onCurrencyChange(this)">
                                         <?php foreach ($currency_list as $cur): ?>
                                             <option value="<?php echo htmlspecialchars($cur['code']); ?>"
                                                     data-rate="<?php echo htmlspecialchars($cur['exchange_rate']); ?>"

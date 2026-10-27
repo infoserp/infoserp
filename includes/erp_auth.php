@@ -96,7 +96,12 @@ if (!function_exists('erp_auth_upgrade_login_password')) {
                  WHERE user_id = ?"
             );
             $stmt->execute([$hash, $userId, $userId]);
-            return $stmt->rowCount() > 0;
+            // sqlsrv rowCount() is unreliable after UPDATE — confirm the hash landed
+            $chk = $con->prepare(
+                "SELECT COUNT(*) FROM branch_user WHERE user_id = ? AND login_password = ?"
+            );
+            $chk->execute([$userId, $hash]);
+            return (int) $chk->fetchColumn() > 0;
         } catch (PDOException $e) {
             // Typically "String or binary data would be truncated" if column is still varchar(15)
             error_log('erp_auth_upgrade_login_password: ' . $e->getMessage());
@@ -129,7 +134,7 @@ if (!function_exists('erp_auth_allowed_user_types')) {
 if (!function_exists('erp_auth_find_user')) {
     /**
      * Load one branch_user identity for login (any branch row for this user_id).
-     * Temporary: uses edit_password (plain text) for sign-in.
+     * Prefers rows that already have a login_password set.
      */
     function erp_auth_find_user(PDO $con, $userId)
     {
@@ -137,12 +142,12 @@ if (!function_exists('erp_auth_find_user')) {
             "SELECT TOP 1
                     bu.user_id,
                     bu.user_type,
-                    bu.edit_password,
+                    bu.login_password,
                     bu.user_name,
                     bu.allow_allbranch
              FROM   branch_user bu
              WHERE  bu.user_id = ?
-             ORDER BY CASE WHEN ISNULL(bu.edit_password, '') <> '' THEN 0 ELSE 1 END,
+             ORDER BY CASE WHEN ISNULL(bu.login_password, '') <> '' THEN 0 ELSE 1 END,
                       bu.branch_code"
         );
         $stmt->execute([$userId]);

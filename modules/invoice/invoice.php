@@ -137,17 +137,22 @@ $save_label      = 'Save Invoice';
 $search_doc_url  = erp_iframe_url('search_document?doc_code=' . urlencode($doc_code));
 $selected_doc_type = $doc_type;
 
-// Check if the logged-in user is allowed to edit documents
-$user_allow_edit = 'Y'; // default open; restrict below if branch_user says otherwise
+// Check if the logged-in user is allowed to edit / delete documents
+$user_allow_edit   = 'Y';
+$user_allow_delete = 'N';
 try {
-    $stmt_ue = $con->prepare("SELECT allow_edit FROM branch_user WHERE user_id = ? AND branch_code = ?");
+    $stmt_ue = $con->prepare(
+        "SELECT ISNULL(allow_edit, 'N') AS allow_edit, ISNULL(allow_delete, 'N') AS allow_delete
+         FROM branch_user WHERE user_id = ? AND branch_code = ?"
+    );
     $stmt_ue->execute([$user, $branch_code]);
     $row_ue = $stmt_ue->fetch(PDO::FETCH_ASSOC);
-    if ($row_ue && isset($row_ue['allow_edit'])) {
-        $user_allow_edit = strtoupper(trim($row_ue['allow_edit']));
+    if ($row_ue) {
+        $user_allow_edit   = strtoupper(trim((string) ($row_ue['allow_edit'] ?? 'N')));
+        $user_allow_delete = strtoupper(trim((string) ($row_ue['allow_delete'] ?? 'N')));
     }
 } catch (Exception $e) {
-    error_log("invoice.php allow_edit fetch error: " . $e->getMessage());
+    error_log("invoice.php allow_edit/allow_delete fetch error: " . $e->getMessage());
 }
 
 // Prior / Next document navigation
@@ -208,9 +213,9 @@ if ($doc_no !== '') {
     <title><?php echo htmlspecialchars($doc_type_name . ' (' . $doc_code . ')'); ?></title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link href="//maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" rel="stylesheet">
-    <link href="../../vendor/font-awesome/css/font-awesome.min.css" rel="stylesheet" type="text/css">
+    <link href="<?php echo htmlspecialchars(erp_font_awesome_href(), ENT_QUOTES, 'UTF-8'); ?>" rel="stylesheet" type="text/css">
     <link rel="stylesheet" href="../../material_request.css?v=5">
-    <link rel="stylesheet" href="../../assets/css/erp_document.css?v=27">
+    <link rel="stylesheet" href="../../assets/css/erp_document.css?v=35">
 </head>
 <body>
 

@@ -73,6 +73,7 @@ function si_blank_line($con, $company_code, $branch_code) {
             <td><input type="text" class="form-control form-control-sm detail-input" name="account[]" placeholder="A/c" readonly></td>
             <td class="si-del"><button type="button" class="btn btn-sm btn-danger" onclick="deleteDetailLine(this)" title="Delete line"><i class="fa fa-trash"></i></button></td>
             <input type="hidden" name="line_id[]" value="' . $line_id . '">
+            <input type="hidden" name="job_no[]" value="">
         </tr>'
     ];
 }
@@ -247,6 +248,7 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
     <td><input type="text" class="form-control form-control-sm detail-input" name="account[]" value="<?php echo htmlspecialchars($_dl['ac_code'] ?? ''); ?>" readonly></td>
     <td class="si-del"><button type="button" class="btn btn-sm btn-danger" title="Delete line" onclick="deleteDetailLine(this)" <?php echo $_detail_view ? 'style="display:none;"' : ''; ?>><i class="fa fa-trash"></i></button></td>
     <input type="hidden" name="line_id[]" value="<?php echo $_dl_lid; ?>">
+    <input type="hidden" name="job_no[]" value="<?php echo htmlspecialchars($_dl['job_no'] ?? ''); ?>">
 </tr>
 <?php endforeach; ?>
 <?php elseif (!$_detail_view): ?>
@@ -682,6 +684,98 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
         updateSummary();
     }
 
+    function siEsc(v) {
+        return String(v == null ? '' : v)
+            .replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+            .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function siBuildJobLineHtml(data) {
+        var lid = 'line_job_' + Date.now() + '_' + Math.floor(Math.random() * 9000 + 1000);
+        var qty = Number(data.qty || 0);
+        var rate = Number(data.rate || 0);
+        var vatPct = (data.vat != null && data.vat !== '') ? Number(data.vat) : VAT_PCT;
+        var discAmt = 0;
+        var excise = 0;
+        var gross = Math.round((qty * rate - discAmt + Number.EPSILON) * 100) / 100;
+        var amount = Math.round((gross + excise + Number.EPSILON) * 100) / 100;
+        var vatAmt = Math.round((amount * vatPct / 100 + Number.EPSILON) * 100) / 100;
+        var totalVat = Math.round((amount + vatAmt + Number.EPSILON) * 100) / 100;
+        var descRo = '';
+        return '<tr data-line-id="' + lid + '" class="detail-row" data-job-no="' + siEsc(data.job_no || '') + '" data-job-item="' + siEsc(data.item_no || '') + '">'
+            + '<td class="line-no">1</td>'
+            + '<td><input type="text" class="form-control form-control-sm detail-input si-code" name="item_code[]" value="' + siEsc(data.item_code || '') + '" readonly style="cursor:pointer;" onfocus="openItemSearch(this)" onclick="openItemSearch(this)"></td>'
+            + '<td class="si-desc-cell">'
+            + '<textarea class="form-control form-control-sm detail-input si-desc" name="item_desc[]" rows="1" ' + descRo + '>' + siEsc(data.item_desc || '') + '</textarea>'
+            + '<span class="si-stock">Stock <input type="text" class="detail-input si-stock-inp" name="stock[]" value="0" readonly></span>'
+            + '</td>'
+            + '<td><input type="text" class="form-control form-control-sm detail-input" name="location[]" value="' + siEsc(LOCATION_CODE) + '" style="text-align:center;" readonly></td>'
+            + '<td><input type="text" class="form-control form-control-sm detail-input" name="unit[]" value="' + siEsc(data.unit || '') + '" readonly></td>'
+            + '<td><input type="number" class="form-control form-control-sm detail-input" name="qty[]" value="' + qty + '" style="text-align:right;"></td>'
+            + '<td><input type="number" class="form-control form-control-sm detail-input" name="rate[]" value="' + rate.toFixed(2) + '" step="0.01" style="text-align:right;"></td>'
+            + '<td><div class="detail-split-inputs">'
+            + '<input type="number" class="form-control form-control-sm detail-input" name="discount_pct[]" value="0.00" step="0.01" style="text-align:center;">'
+            + '<input type="number" class="form-control form-control-sm detail-input" name="discount_amt[]" value="0.00" step="0.01" style="text-align:right;">'
+            + '</div></td>'
+            + '<td><div class="detail-split-inputs si-excise">'
+            + '<input type="number" class="form-control form-control-sm detail-input" name="excise_rate[]" value="0" step="0.01" style="text-align:right;">'
+            + '<input type="number" class="form-control form-control-sm detail-input" name="excise_tax_amt[]" value="0.00" step="0.01" style="text-align:right;" readonly>'
+            + '</div></td>'
+            + '<td><input type="text" class="form-control form-control-sm detail-input si-amount" name="total[]" value="' + amount.toFixed(2) + '" readonly style="text-align:right;"></td>'
+            + '<td><div class="detail-split-inputs">'
+            + '<input type="text" class="form-control form-control-sm detail-input" name="vat[]" value="' + vatPct + '" readonly style="text-align:center;">'
+            + '<input type="text" class="form-control form-control-sm detail-input" name="vat_amount[]" value="' + vatAmt.toFixed(2) + '" readonly style="text-align:right;">'
+            + '</div></td>'
+            + '<td><input type="text" class="form-control form-control-sm detail-input si-total" name="total_with_vat[]" value="' + totalVat.toFixed(2) + '" readonly style="text-align:right;"></td>'
+            + '<td><input type="text" class="form-control form-control-sm detail-input" name="account[]" value="' + siEsc(DEFAULT_AC) + '" readonly></td>'
+            + '<td class="si-del"><button type="button" class="btn btn-sm btn-danger" onclick="deleteDetailLine(this)" title="Delete line"><i class="fa fa-trash"></i></button></td>'
+            + '<input type="hidden" name="line_id[]" value="' + lid + '">'
+            + '<input type="hidden" name="job_no[]" value="' + siEsc(data.job_no || '') + '">'
+            + '</tr>';
+    }
+
+    /** Apply lines picked from Select JOB modal (called from header). */
+    function siApplyJobLines(picked) {
+        if (!Array.isArray(picked) || !picked.length) return;
+        var tbody = document.getElementById('detailTableBody');
+        var emptyRow = tbody.querySelector('tr td[colspan="15"]');
+        if (emptyRow) emptyRow.closest('tr').remove();
+
+        Array.prototype.slice.call(tbody.querySelectorAll('tr.detail-row')).forEach(function (tr) {
+            var code = (tr.querySelector('input[name="item_code[]"]') || {}).value || '';
+            var desc = (tr.querySelector('[name="item_desc[]"]') || {}).value || '';
+            var qty = parseFloat((tr.querySelector('input[name="qty[]"]') || {}).value) || 0;
+            if (!String(code).trim() && !String(desc).trim() && qty === 0) tr.remove();
+        });
+
+        picked.forEach(function (p) {
+            var existing = null;
+            tbody.querySelectorAll('tr.detail-row').forEach(function (tr) {
+                var job = (tr.querySelector('input[name="job_no[]"]') || {}).value || '';
+                var code = (tr.querySelector('input[name="item_code[]"]') || {}).value || '';
+                var jobItem = tr.getAttribute('data-job-item') || '';
+                if (job === (p.job_no || '') && (code === (p.item_code || '') || jobItem === String(p.item_no || ''))) {
+                    existing = tr;
+                }
+            });
+            if (existing) {
+                var qtyEl = existing.querySelector('input[name="qty[]"]');
+                var rateEl = existing.querySelector('input[name="rate[]"]');
+                var unitEl = existing.querySelector('input[name="unit[]"]');
+                var descEl = existing.querySelector('[name="item_desc[]"]');
+                if (qtyEl) qtyEl.value = p.qty;
+                if (rateEl) rateEl.value = Number(p.rate || 0).toFixed(2);
+                if (unitEl) unitEl.value = p.unit || '';
+                if (descEl && (p.item_desc || '')) descEl.value = p.item_desc;
+                recalcRow(existing);
+                return;
+            }
+            tbody.insertAdjacentHTML('beforeend', siBuildJobLineHtml(p));
+        });
+        updateLineNumbers();
+        updateSummary();
+    }
+
     function getDetailLinesJson() {
         var rows = document.querySelectorAll('#detailTableBody tr.detail-row');
         var lines = [];
@@ -690,7 +784,11 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
                 var el = row.querySelector('[name="' + name + '"]');
                 return el ? el.value : '';
             }
-            if (val('item_code[]').trim() === '') return;
+            var code = val('item_code[]').trim();
+            var desc = val('item_desc[]').trim();
+            var qty = parseFloat(val('qty[]')) || 0;
+            // Keep job/free-text lines that have description or qty even without item code
+            if (code === '' && desc === '' && qty === 0) return;
             lines.push({
                 item_code:    val('item_code[]'),
                 item_desc:    val('item_desc[]'),
@@ -704,7 +802,8 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
                 tax_amount:   val('excise_tax_amt[]'),
                 tax1_amount:  val('vat_amount[]'),
                 discount_pct: val('discount_pct[]'),
-                discount_amt: val('discount_amt[]')
+                discount_amt: val('discount_amt[]'),
+                job_no:       val('job_no[]')
             });
         });
         return JSON.stringify(lines);
@@ -715,14 +814,19 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
         if (e.target.classList.contains('detail-input')) {
             const row = e.target.closest('tr.detail-row');
             if (row) {
-                // Qty > stock validation (branch_user.allow_zero_stock = 'Y' skips it)
+                // Qty > stock validation (branch_user.allow_zero_stock = 'Y' skips it).
+                // Job Card lines (job_no set) and free-text lines without item code skip stock check.
                 if (e.target.name === 'qty[]' && ALLOW_ZERO_STOCK !== 'Y') {
-                    const enteredQty = parseFloat(e.target.value) || 0;
-                    const stockInput = row.querySelector('input[name="stock[]"]');
-                    const stockQty   = parseFloat(stockInput ? stockInput.value : 0) || 0;
-                    if (enteredQty > stockQty) {
-                        alert('Entered Qty is more than the Stock..');
-                        e.target.value = Math.max(stockQty, 0);
+                    const jobNo = ((row.querySelector('input[name="job_no[]"]') || {}).value || '').trim();
+                    const itemCode = ((row.querySelector('input[name="item_code[]"]') || {}).value || '').trim();
+                    if (!jobNo && itemCode) {
+                        const enteredQty = parseFloat(e.target.value) || 0;
+                        const stockInput = row.querySelector('input[name="stock[]"]');
+                        const stockQty   = parseFloat(stockInput ? stockInput.value : 0) || 0;
+                        if (enteredQty > stockQty) {
+                            alert('Entered Qty is more than the Stock..');
+                            e.target.value = Math.max(stockQty, 0);
+                        }
                     }
                 }
                 recalcRow(row, e.target.name);

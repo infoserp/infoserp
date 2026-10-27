@@ -20,6 +20,8 @@ $branch_code = isset($_SESSION['branch_code']) ? $_SESSION['branch_code'] : '';
 $search_sources = [
     'MR' => ['h' => 'material_request_h', 'd' => 'material_request_d', 'ref_col' => 'tracking_no', 'job_col' => null],
     'SI' => ['h' => 'invoice_h',          'd' => 'invoice_d',          'ref_col' => 'tracking_no', 'job_col' => 'job_no'],
+    'SQ' => ['h' => 'sales_quotation_h',  'd' => 'sales_quotation_d',  'ref_col' => 'tracking_no', 'job_col' => 'job_no'],
+    'JC' => ['h' => 'job_card_h',         'd' => 'job_card_d',         'ref_col' => 'tracking_no', 'job_col' => 'project_no'],
     'RV' => ['h' => 'chq_receipt_h',      'd' => 'chq_receipt_d',      'ref_col' => 'chq_no',      'job_col' => null],
     'TO' => ['h' => 'stock_transfer_out_h', 'd' => 'stock_transfer_out_d', 'ref_col' => 'requisition_no', 'job_col' => null],
     'TI' => ['h' => 'stock_transfer_in_h',  'd' => 'stock_transfer_in_d',  'ref_col' => 'location_from',  'job_col' => null],

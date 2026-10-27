@@ -17,10 +17,11 @@ $trustCert = !empty($erpConfig['db_trust_server_certificate']);
 // from config.local.php (db_username / db_password). Session fallback is legacy only.
 $configUser = trim((string) ($erpConfig['db_username'] ?? ''));
 $configPass = (string) ($erpConfig['db_password'] ?? '');
-$user     = $configUser !== '' ? $configUser : trim((string) ($_SESSION['dbusername'] ?? ''));
-$password = $configUser !== '' ? $configPass : (string) ($_SESSION['dbpwd'] ?? '');
+// Use distinct names — do not overwrite caller's $user / $password (login.php form creds).
+$erpDbUser = $configUser !== '' ? $configUser : trim((string) ($_SESSION['dbusername'] ?? ''));
+$erpDbPass = $configUser !== '' ? $configPass : (string) ($_SESSION['dbpwd'] ?? '');
 
-if ($configUser === '' && $user === '') {
+if ($configUser === '' && $erpDbUser === '') {
 	error_log('db.php: set db_username / db_password in config.local.php (SQL service account).');
 }
 
@@ -33,7 +34,7 @@ try {
 	if ($trustCert) {
 		$dsn .= ';TrustServerCertificate=true';
 	}
-	$con = new PDO($dsn, $user, $password);
+	$con = new PDO($dsn, $erpDbUser, $erpDbPass);
 
 	// Throw standard PHP Exception when database error occurs
 	$con->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);

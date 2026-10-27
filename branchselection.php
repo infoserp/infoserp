@@ -92,8 +92,12 @@ if (isset($_POST['branch_code'])) {
             'm_salesorderconfirmation',
             'm_txn_purchaseorderconfirmation',
             'm_materialrequest',
+            'm_txn_salesquotation',
+            'm_txn_jobcard',
             'm_txn_salesinvoice',
             'm_documentsetup',
+            'm_changepassword',
+            'm_ma-customer',
             'm_tr-receiptvoucher',
             'm_deliveryorderdespatch',
             'm_tr-stocktransferout',
@@ -109,8 +113,12 @@ if (isset($_POST['branch_code'])) {
         $_SESSION["POC"] = "N";
         $_SESSION["SOC"] = "N";
         $_SESSION["MRQ"] = "N";
+        $_SESSION["SQ"] = "N";
+        $_SESSION["JC"] = "N";
         $_SESSION["SI"] = "N";
         $_SESSION["DOC"] = "N";
+        $_SESSION["CPW"] = "N";
+        $_SESSION["CUS"] = "N";
         $_SESSION["RV"] = "N";
         $_SESSION["DD"] = "N";
         $_SESSION["TO"] = "N";
@@ -124,8 +132,12 @@ if (isset($_POST['branch_code'])) {
         $_SESSION["icon_DR"]  = "N";
         $_SESSION["icon_SOC"] = "N";
         $_SESSION["icon_MRQ"] = "N";
+        $_SESSION["icon_SQ"]  = "N";
+        $_SESSION["icon_JC"]  = "N";
         $_SESSION["icon_SI"]  = "N";
         $_SESSION["icon_DOC"] = "N";
+        $_SESSION["icon_CPW"] = "N";
+        $_SESSION["icon_CUS"] = "N";
         $_SESSION["icon_RV"]  = "N";
         $_SESSION["icon_DD"]  = "N";
         $_SESSION["icon_TO"]  = "N";
@@ -187,6 +199,16 @@ if (isset($_POST['branch_code'])) {
                         $_SESSION["icon_MRQ"] = $menu_icon;
                         break;
                     }
+                case "m_txn_salesquotation": {
+                        $_SESSION["SQ"] = "Y";
+                        $_SESSION["icon_SQ"] = $menu_icon;
+                        break;
+                    }
+                case "m_txn_jobcard": {
+                        $_SESSION["JC"] = "Y";
+                        $_SESSION["icon_JC"] = $menu_icon;
+                        break;
+                    }
                 case "m_txn_salesinvoice": {
                         $_SESSION["SI"] = "Y";
                         $_SESSION["icon_SI"] = $menu_icon;
@@ -195,6 +217,16 @@ if (isset($_POST['branch_code'])) {
                 case "m_documentsetup": {
                         $_SESSION["DOC"] = "Y";
                         $_SESSION["icon_DOC"] = $menu_icon;
+                        break;
+                    }
+                case "m_changepassword": {
+                        $_SESSION["CPW"] = "Y";
+                        $_SESSION["icon_CPW"] = $menu_icon;
+                        break;
+                    }
+                case "m_ma-customer": {
+                        $_SESSION["CUS"] = "Y";
+                        $_SESSION["icon_CUS"] = $menu_icon;
                         break;
                     }
                 case "m_tr-receiptvoucher": {

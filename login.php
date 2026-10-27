@@ -52,14 +52,13 @@ if (isset($_POST['username'])) {
 
             if ($row) {
                 $userType = strtoupper(trim((string) ($row['user_type'] ?? '')));
-                // Temporary: plain-text match against edit_password (not login_password)
-                $storedPwd = trim((string) ($row['edit_password'] ?? ''));
+                $storedPwd = trim((string) ($row['login_password'] ?? ''));
 
                 if ($userType === '' || !in_array($userType, $allowedTypes, true)) {
                     $failMsg = 'This user type is not allowed to sign in.';
                 } elseif ($storedPwd === '') {
-                    $failMsg = 'No edit password is set for this user.';
-                } elseif (!(hash_equals($storedPwd, $password) || hash_equals($storedPwd, strtoupper($password)))) {
+                    $failMsg = 'No login password is set for this user.';
+                } elseif (!erp_password_verify($password, $storedPwd)) {
                     $failMsg = 'Username/password is incorrect.';
                 } else {
                     $ok = true;
@@ -71,6 +70,11 @@ if (isset($_POST['username'])) {
                 $_SESSION['user_type'] = strtoupper(trim((string) $row['user_type']));
                 $_SESSION['user_name'] = trim((string) ($row['user_name'] ?? $username));
                 $_SESSION['allow_allbranch'] = strtoupper(trim((string) ($row['allow_allbranch'] ?? 'N'))) === 'Y' ? 'Y' : 'N';
+
+                if (!empty($erpConfig['rehash_login_password_on_login'])
+                    && erp_password_needs_rehash($row['login_password'] ?? '')) {
+                    erp_auth_upgrade_login_password($con, $username, $password);
+                }
 
                 try {
                     $con->prepare(

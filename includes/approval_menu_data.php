@@ -259,6 +259,24 @@ if ($_SESSION["MRQ"] == "Y") {
         'icon'  => 'fa-clipboard',
     ];
 }
+if (($_SESSION["SQ"] ?? 'N') == "Y") {
+    $menu_items[] = [
+        'key'   => 'SQ',
+        'menu_code' => 'm_txn_salesquotation',
+        'label' => 'Sales Quotation',
+        'href'  => erp_url('modules/sales_quot/sales_quot?code=SQ'),
+        'icon'  => 'fa-file-text-o',
+    ];
+}
+if (($_SESSION["JC"] ?? 'N') == "Y") {
+    $menu_items[] = [
+        'key'   => 'JC',
+        'menu_code' => 'm_txn_jobcard',
+        'label' => 'Job Card',
+        'href'  => erp_url('modules/job_card/job_card?code=JC'),
+        'icon'  => 'fa-briefcase',
+    ];
+}
 if ($_SESSION["SI"] == "Y") {
     $menu_items[] = [
         'key'   => 'SI',
@@ -275,6 +293,24 @@ if ($_SESSION["DOC"] == "Y") {
         'label' => 'Document Setup',
         'href'  => erp_url('document_setup'),
         'icon'  => 'fa-cog',
+    ];
+}
+if (($_SESSION["CPW"] ?? 'N') == "Y") {
+    $menu_items[] = [
+        'key'   => 'CPW',
+        'menu_code' => 'm_changepassword',
+        'label' => 'Change Password',
+        'href'  => erp_url('change_password'),
+        'icon'  => 'fa-key',
+    ];
+}
+if (($_SESSION["CUS"] ?? 'N') == "Y") {
+    $menu_items[] = [
+        'key'       => 'CUS',
+        'menu_code' => 'm_ma-customer',
+        'label'     => 'Customer',
+        'href'      => erp_iframe_url('modules/customer/customer'),
+        'icon'      => 'fa-users',
     ];
 }
 if ($_SESSION["RV"] == "Y") {
@@ -345,6 +381,7 @@ if (!function_exists('erp_menu_group_icon')) {
             'purchase'  => 'fa-shopping-cart',
             'sales'     => 'fa-line-chart',
             'receipt'   => 'fa-money',
+            'master'    => 'fa-database',
         ];
         return $icons[strtolower(trim((string) $label))] ?? 'fa-folder-o';
     }

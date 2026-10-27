@@ -7,6 +7,7 @@ if (!isset($con)) {
     include('../../../auth.php');
 }
 require_once __DIR__ . '/../../../includes/doc_setup.php';
+require_once __DIR__ . '/../../../includes/erp_variable_terms.php';
 
 $owns_output_buffer = !isset($con);
 if ($owns_output_buffer) {
@@ -17,6 +18,213 @@ $company_code = $_SESSION["company_code"] ?? '';
 $branch_code  = $_SESSION["branch_code"]  ?? '';
 $user         = $_SESSION['username']     ?? '';
 $today        = date("d/m/Y");
+
+// ── AJAX: Select JOB (pending job cards for Sales Invoice) ──────────────────
+$si_ajax = $_POST['action'] ?? '';
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($si_ajax === 'si_pending_jobs' || $si_ajax === 'si_pending_job_items')) {
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    header('Content-Type: application/json; charset=utf-8');
+    if (!isset($_SESSION['username'])) {
+        http_response_code(401);
+        echo json_encode(['error' => 'Unauthorized']);
+        exit;
+    }
+    $si_enc = function ($s) {
+        if ($s === null) {
+            return '';
+        }
+        $s = trim((string) $s);
+        if (!mb_check_encoding($s, 'UTF-8')) {
+            $s = mb_convert_encoding($s, 'UTF-8', 'ISO-8859-1');
+        }
+        return $s;
+    };
+    try {
+        if ($si_ajax === 'si_pending_jobs') {
+            $ac_code = trim($_POST['ac_code'] ?? '');
+            if ($ac_code === '') {
+                echo json_encode(['error' => 'Please select a Customer first.']);
+                exit;
+            }
+            $branch_like = (($_POST['all_branch'] ?? '0') === '1') ? '%' : $branch_code;
+            $term = '%' . trim($_POST['term'] ?? '') . '%';
+            $stmt = $con->prepare(
+                "SELECT DISTINCT view_jc_si_balance.docno,
+                        job_card_h.doc_dt
+                 FROM job_card_h, view_jc_si_balance
+                 WHERE (job_card_h.company_code = view_jc_si_balance.companycode)
+                   AND (job_card_h.doc_no = view_jc_si_balance.docno)
+                   AND (job_card_h.branch_code = view_jc_si_balance.branchcode)
+                   AND (view_jc_si_balance.companycode = ?)
+                   AND (view_jc_si_balance.branchcode LIKE ?)
+                   AND (job_card_h.ac_code = ?)
+                   AND (job_card_h.cancelled = 'N')
+                   AND (view_jc_si_balance.docno LIKE ?)
+                 GROUP BY view_jc_si_balance.companycode,
+                          view_jc_si_balance.docno,
+                          job_card_h.doc_dt
+                 HAVING (SUM(view_jc_si_balance.txnqty) > 0)
+                 ORDER BY job_card_h.doc_dt DESC, view_jc_si_balance.docno DESC"
+            );
+            $stmt->execute([$company_code, $branch_like, $ac_code, $term]);
+            $docs = [];
+            while ($r = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                $docs[] = [
+                    'doc_no' => $si_enc($r['docno']),
+                    'doc_dt' => $r['doc_dt'] ? date('d/m/Y', strtotime($r['doc_dt'])) : '',
+                ];
+            }
+            echo json_encode($docs);
+        } else {
+            $job_no = trim($_POST['doc_no'] ?? '');
+            if ($job_no === '') {
+                echo json_encode(['error' => 'Job Card number is required.']);
+                exit;
+            }
+            $branch_like = trim($_POST['branch'] ?? '');
+            $branch_like = ($branch_like === '' || (($_POST['all_branch'] ?? '0') === '1')) ? '%' : $branch_like;
+
+            $header = [
+                'job_no'       => $si_enc($job_no),
+                'subject'      => '',
+                'payment_days' => 0,
+                'qtn_no'       => '',
+            ];
+            try {
+                $stmt_h = $con->prepare(
+                    "SELECT TOP 1 subject, ISNULL(payment_days, 0) AS payment_days, qtn_no
+                     FROM job_card_h
+                     WHERE company_code = ?
+                       AND branch_code LIKE ?
+                       AND doc_no = ?
+                     ORDER BY CASE WHEN branch_code = ? THEN 0 ELSE 1 END"
+                );
+                $stmt_h->execute([$company_code, $branch_like, $job_no, $branch_code]);
+                $row_h = $stmt_h->fetch(PDO::FETCH_ASSOC);
+                if ($row_h) {
+                    $header['subject']      = $si_enc($row_h['subject'] ?? '');
+                    $header['payment_days'] = (int) ($row_h['payment_days'] ?? 0);
+                    $header['qtn_no']       = $si_enc($row_h['qtn_no'] ?? '');
+                }
+            } catch (Exception $e) {
+                error_log('SI select JOB header error: ' . $e->getMessage());
+            }
+
+            $stmt = $con->prepare(
+                "SELECT DISTINCT SPACE(1) AS selected,
+                        SUM(view_jc_si_balance.txnqty) AS txnqty,
+                        MAX(view_jc_si_balance.txnunit) AS unit,
+                        0.00 AS qty,
+                        view_jc_si_balance.companycode,
+                        view_jc_si_balance.branchcode,
+                        view_jc_si_balance.docno,
+                        view_jc_si_balance.itemno,
+                        view_jc_si_balance.itemcode,
+                        view_jc_si_balance.itemname,
+                        MAX(ISNULL(job_card_d.trans_rate, job_card_d.item_rate)) AS rate,
+                        MAX(ISNULL(job_card_d.tax1_percent, 0)) AS tax1_percent,
+                        MAX(CAST(job_card_d.remark AS NVARCHAR(MAX))) AS remark,
+                        MAX(ISNULL(job_card_d.quotation_no, '')) AS quotation_no
+                 FROM view_jc_si_balance
+                 LEFT JOIN job_card_d
+                   ON job_card_d.company_code = view_jc_si_balance.companycode
+                  AND job_card_d.branch_code = view_jc_si_balance.branchcode
+                  AND job_card_d.doc_no = view_jc_si_balance.docno
+                  AND job_card_d.item_no = view_jc_si_balance.itemno
+                 WHERE (view_jc_si_balance.companycode = ?)
+                   AND (view_jc_si_balance.branchcode LIKE ?)
+                   AND (view_jc_si_balance.docno = ?)
+                 GROUP BY view_jc_si_balance.companycode,
+                          view_jc_si_balance.branchcode,
+                          view_jc_si_balance.docno,
+                          view_jc_si_balance.itemno,
+                          view_jc_si_balance.itemcode,
+                          view_jc_si_balance.itemname
+                 HAVING (SUM(view_jc_si_balance.txnqty) > 0)
+                 ORDER BY view_jc_si_balance.itemno"
+            );
+            $stmt->execute([$company_code, $branch_like, $job_no]);
+            $items = [];
+            while ($r = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                $items[] = [
+                    'doc_no'    => $si_enc($r['docno']),
+                    'item_no'   => $si_enc($r['itemno']),
+                    'item_code' => $si_enc($r['itemcode']),
+                    'item_name' => $si_enc($r['itemname']),
+                    'unit'      => $si_enc($r['unit']),
+                    'balance'   => (float) $r['txnqty'],
+                    'rate'      => (float) ($r['rate'] ?? 0),
+                    'vat'       => (float) ($r['tax1_percent'] ?? 0),
+                    'remark'    => $si_enc($r['remark'] ?? ''),
+                    'qtn_no'    => $si_enc($r['quotation_no'] ?? ''),
+                ];
+            }
+            echo json_encode(['header' => $header, 'items' => $items]);
+        }
+    } catch (Exception $e) {
+        error_log('SI select JOB error: ' . $e->getMessage());
+        echo json_encode(['error' => $e->getMessage()]);
+    }
+    exit;
+}
+
+// ── AJAX: Delete document (detail + header) when allow_delete = Y ────────────
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $si_ajax === 'si_delete_document') {
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    header('Content-Type: application/json; charset=utf-8');
+    if (!isset($_SESSION['username'])) {
+        http_response_code(401);
+        echo json_encode(['error' => 'Unauthorized']);
+        exit;
+    }
+    try {
+        $del_no = trim($_POST['doc_no'] ?? '');
+        if ($del_no === '') {
+            echo json_encode(['error' => 'Document number is required.']);
+            exit;
+        }
+        $stmt_perm = $con->prepare(
+            "SELECT ISNULL(allow_delete, 'N') AS allow_delete
+             FROM branch_user WHERE user_id = ? AND branch_code = ?"
+        );
+        $stmt_perm->execute([$user, $branch_code]);
+        $perm = $stmt_perm->fetch(PDO::FETCH_ASSOC) ?: [];
+        if (strtoupper(trim((string) ($perm['allow_delete'] ?? 'N'))) !== 'Y') {
+            echo json_encode(['error' => 'You do not have delete permission (allow_delete must be Y).']);
+            exit;
+        }
+        $con->beginTransaction();
+        $stmt_dd = $con->prepare(
+            "DELETE FROM invoice_d WHERE company_code = ? AND branch_code = ? AND doc_no = ?"
+        );
+        $stmt_dd->execute([$company_code, $branch_code, $del_no]);
+        $stmt_dh = $con->prepare(
+            "DELETE FROM invoice_h WHERE company_code = ? AND branch_code = ? AND doc_no = ?"
+        );
+        $stmt_dh->execute([$company_code, $branch_code, $del_no]);
+        try {
+            $stmt_vt = $con->prepare(
+                "DELETE FROM doc_h_terms WHERE company_code = ? AND branch_code = ? AND doc_no = ?"
+            );
+            $stmt_vt->execute([$company_code, $branch_code, $del_no]);
+        } catch (Exception $e) {
+            // terms table may be absent on some DBs
+        }
+        $con->commit();
+        echo json_encode(['success' => true]);
+    } catch (Exception $e) {
+        if ($con->inTransaction()) {
+            $con->rollBack();
+        }
+        error_log('SI delete error: ' . $e->getMessage());
+        echo json_encode(['error' => $e->getMessage()]);
+    }
+    exit;
+}
 
 // AJAX Handler: Fetch customer list for search
 if (isset($_GET['action']) && $_GET['action'] === 'search_customers') {
@@ -151,6 +359,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_si'])) {
         $p_po_date       = trim($_POST['po_date']           ?? '') ?: null;
         $p_do_no         = trim($_POST['do_no']             ?? '');
         $p_do_date       = trim($_POST['do_date']           ?? '') ?: null;
+        $p_job_no        = trim($_POST['job_no']            ?? '');
+        $p_payment_days  = (int) ($_POST['payment_days']    ?? $_POST['cr_days'] ?? 0);
         $p_update_inv      = isset($_POST['update_inventory']) && $_POST['update_inventory'] === 'Y' ? 'Y' : 'N';
         $p_amount          = (float)($_POST['amount']      ?? 0);
         $p_tax_amount      = (float)($_POST['tax_amount']  ?? 0);
@@ -163,7 +373,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_si'])) {
         // Optional text columns are stored as NULL (not '') when left blank
         foreach (['p_salesman_code', 'p_contact_name', 'p_contact_no', 'p_contact_email', 'p_subject',
                   'p_project', 'p_payment_terms', 'p_delivery_terms', 'p_delivery_loc', 'p_narration',
-                  'p_qtn_no', 'p_po_no', 'p_do_no', 'p_payment_mode'] as $si_opt) {
+                  'p_qtn_no', 'p_po_no', 'p_do_no', 'p_job_no', 'p_payment_mode'] as $si_opt) {
             if ($$si_opt === '') {
                 $$si_opt = null;
             }
@@ -196,10 +406,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_si'])) {
 
                 $si_stock_lines = [];
                 foreach ($si_chk_lines as $ln) {
+                    // Job Card / free-text lines are not stock-controlled
+                    if (trim((string) ($ln['job_no'] ?? '')) !== '') {
+                        continue;
+                    }
+                    $icode = trim((string) ($ln['item_code'] ?? ''));
+                    if ($icode === '') {
+                        continue;
+                    }
                     $loc = trim((string) ($ln['location'] ?? ''));
                     $si_stock_lines[] = [
                         'location'  => $loc !== '' ? $loc : $si_default_loc,
-                        'item_code' => $ln['item_code'] ?? '',
+                        'item_code' => $icode,
                         'qty'       => $ln['qty'] ?? 0,
                     ];
                 }
@@ -254,6 +472,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_si'])) {
                 po_date = ?,
                 do_no = ?,
                 do_date = ?,
+                job_no = ?,
+                payment_days = ?,
+                confirmed = 'Y',
+                approved = 'Y',
                 update_inventory = ?,
                 pay_mode = ?,
                 discount_amount = ?,
@@ -283,6 +505,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_si'])) {
                 $p_subject, $p_project, $p_payment_terms, $p_delivery_terms, $p_delivery_loc,
                 $p_narration,
                 $p_qtn_no, $p_qtn_date, $p_po_no, $p_po_date, $p_do_no, $p_do_date,
+                $p_job_no, $p_payment_days,
                 $p_update_inv,
                 $p_payment_mode, $p_discount_amount,
                 $p_amount, $p_tax_amount, $p_tax1_amount,
@@ -301,8 +524,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_si'])) {
                 subject, project, payment_terms, delivery_terms, delivery_location,
                 narration,
                 user_id, user_date, last_userid, last_userdate,
-                confirmed, cancelled, despatch, copy_received,
+                confirmed, approved, cancelled, despatch, copy_received,
                 qtn_no, qtn_date, po_no, po_date, do_no, do_date,
+                job_no, payment_days,
                 update_inventory,
                 pay_mode, discount_amount,
                 amount, tax_amount, tax1_amount, tax_applied,
@@ -317,8 +541,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_si'])) {
                 ?, ?, ?, ?, ?,
                 ?,
                 ?, ?, ?, ?,
-                'N', 'N', 'N', 'N',
+                'Y', 'Y', 'N', 'N', 'N',
                 ?, ?, ?, ?, ?, ?,
+                ?, ?,
                 ?,
                 ?, ?,
                 ?, ?, ?, 'Y',
@@ -337,6 +562,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_si'])) {
                 $p_narration,
                 $user, $now, $user, $now,
                 $p_qtn_no, $p_qtn_date, $p_po_no, $p_po_date, $p_do_no, $p_do_date,
+                $p_job_no, $p_payment_days,
                 $p_update_inv,
                 $p_payment_mode, $p_discount_amount,
                 $p_amount, $p_tax_amount, $p_tax1_amount,
@@ -371,13 +597,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_si'])) {
                             item_qty, trans_qty, item_rate, trans_rate,
                             ac_code, location_code, stock_qty,
                             tax1_percent, tax_amount, tax1_amount,
-                            discount_percent, discount_amount
-                          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                            discount_percent, discount_amount,
+                            job_no, remark, po_no, do_no, so_no, qtn_no
+                          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
                 $stmt_d = $con->prepare($sql_d);
 
                 foreach ($detail_lines as $idx => $line) {
                     $serial_no = str_pad($idx + 1, 4, '0', STR_PAD_LEFT);
-                    $item_no   = $idx + 1;
+                    $item_no   = trim((string) ($line['line_no'] ?? ''));
+                    if ($item_no === '') {
+                        $item_no = (string) ($idx + 1);
+                    }
                     $d_item_code = trim($line['item_code'] ?? '');
                     $d_unit      = trim($line['unit'] ?? '');
 
@@ -392,6 +622,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_si'])) {
                     if ($d_item_unit === '') {
                         $d_item_unit = $d_trans_unit;
                     }
+                    $d_job_no = trim((string) ($line['job_no'] ?? ''));
+                    $d_remark = trim((string) ($line['remark'] ?? ''));
+                    $d_po_no  = trim((string) ($line['po_no'] ?? ''));
+                    $d_do_no  = trim((string) ($line['do_no'] ?? ''));
+                    $d_so_no  = trim((string) ($line['so_no'] ?? ''));
+                    $d_qtn_no = trim((string) ($line['qtn_no'] ?? ''));
 
                     $stmt_d->execute([
                         $company_code,
@@ -415,11 +651,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_si'])) {
                         (float)($line['tax_amount']  ?? 0),
                         (float)($line['tax1_amount'] ?? 0),
                         (float)($line['discount_pct'] ?? 0),
-                        (float)($line['discount_amt'] ?? 0)
+                        (float)($line['discount_amt'] ?? 0),
+                        $d_job_no !== '' ? $d_job_no : null,
+                        $d_remark !== '' ? $d_remark : null,
+                        $d_po_no !== '' ? $d_po_no : null,
+                        $d_do_no !== '' ? $d_do_no : null,
+                        $d_so_no !== '' ? $d_so_no : null,
+                        $d_qtn_no !== '' ? $d_qtn_no : null,
                     ]);
                 }
             }
         }
+
+        // Variable Terms → doc_h_terms (shared)
+        erpVariableTermsPersist(
+            $con,
+            $company_code,
+            $branch_code,
+            $p_doc_no,
+            $p_doc_type,
+            $_POST['variable_terms_json'] ?? '[]',
+            $user
+        );
 
         $con->commit();
 
@@ -569,6 +822,8 @@ $qtn_no          = '';
 $qtn_date        = '';
 $do_no           = '';
 $do_date         = '';
+$job_no_hdr      = '';
+$payment_days    = '';
 $payment_mode    = '';
 $sales_type      = '';
 $salesman        = '';
@@ -712,6 +967,8 @@ if (isset($_GET['doc_no']) && trim($_GET['doc_no']) !== '') {
         $po_no           = trim($row_edit['po_no'] ?? '');
         $qtn_no          = trim($row_edit['qtn_no'] ?? '');
         $do_no           = trim($row_edit['do_no'] ?? '');
+        $job_no_hdr      = trim($row_edit['job_no'] ?? '');
+        $payment_days    = (string) intval($row_edit['payment_days'] ?? 0);
         $currency        = trim($row_edit['currency_code'] ?? 'AED');
         $currency_rate   = trim($row_edit['exchange_rate'] ?? '1.000000000');
         $driver          = trim($row_edit['driver'] ?? '');
@@ -925,9 +1182,9 @@ $si_self_url = '/' . ltrim(
                         <label class="doc-lbl">Currency</label>
                         <div class="doc-inp-group">
                             <?php if ($is_view_mode): ?>
-                                <input type="text" name="currency" class="doc-inp" value="<?php echo htmlspecialchars($currency); ?>" readonly>
+                                <input type="text" name="currency" class="doc-inp doc-currency" value="<?php echo htmlspecialchars($currency); ?>" readonly maxlength="4">
                             <?php else: ?>
-                                <select id="currencySelect" class="doc-inp" onchange="onCurrencyChange(this)">
+                                <select id="currencySelect" class="doc-inp doc-currency" onchange="onCurrencyChange(this)">
                                     <?php foreach ($currency_list as $cur): ?>
                                         <option value="<?php echo htmlspecialchars($cur['code']); ?>"
                                                 data-rate="<?php echo htmlspecialchars($cur['exchange_rate']); ?>"
@@ -950,11 +1207,26 @@ $si_self_url = '/' . ltrim(
                         <label class="doc-lbl">PO Date</label>
                         <input type="date" name="po_date" class="doc-inp" value="<?php echo htmlspecialchars($po_date); ?>" <?php echo $is_view_mode ? 'disabled' : ''; ?>>
                     </div>
-                    <div class="doc-field span-4">
+                    <div class="doc-field">
+                        <label class="doc-lbl">Job No.</label>
+                        <input type="text" name="job_no" id="siJobNoInput" class="doc-inp" value="<?php echo htmlspecialchars($job_no_hdr); ?>" <?php echo $is_view_mode ? 'readonly' : ''; ?> placeholder="From Job Card">
+                    </div>
+                    <div class="doc-field">
+                        <label class="doc-lbl">Cr. Days</label>
+                        <input type="text" name="payment_days" id="siPaymentDaysInput" class="doc-inp" value="<?php echo htmlspecialchars($payment_days); ?>" <?php echo $is_view_mode ? 'readonly' : ''; ?> placeholder="From Job Card">
+                    </div>
+                    <div class="doc-field span-2">
                         <label class="doc-lbl">Narration</label>
                         <div class="doc-inp-group">
                             <input type="text" name="narration" class="doc-inp" value="<?php echo htmlspecialchars($narration); ?>" <?php echo $is_view_mode ? 'readonly' : ''; ?>>
                             <button type="button" class="doc-more" onclick="openMoreModal('narration','Narration')">More..</button>
+                        </div>
+                    </div>
+                    <div class="doc-field si-header-actions">
+                        <label class="doc-lbl">Actions</label>
+                        <div class="doc-inp-group si-action-btns">
+                            <button type="button" class="doc-action-btn doc-action-terms" onclick="erpOpenVariableTerms()" title="Variable Terms"><i class="fa fa-file-text-o"></i> Variable Terms</button>
+                            <button type="button" class="doc-action-btn doc-action-qtn" id="siSelectJobBtn" onclick="siOpenSelectJob()" title="Select Job Card" <?php echo $is_view_mode ? 'disabled' : ''; ?>><i class="fa fa-briefcase"></i> Select JOB</button>
                         </div>
                     </div>
                 </div>
@@ -1098,10 +1370,77 @@ $si_self_url = '/' . ltrim(
             </section>
             <?php include __DIR__ . '/../../../shared/doc_attachments_panel.php'; ?>
         </aside>
+
+        <?php
+        $vt_doc_no   = !empty($is_view_mode) ? (string) $doc_no : '';
+        $vt_doc_type = $selected_doc_type ?? '';
+        $vt_readonly = !empty($is_view_mode);
+        include __DIR__ . '/../../../shared/variable_terms.php';
+        ?>
     </form>
 
 </div><!-- /.mr-container -->
 </div><!-- /.container-fluid -->
+
+<!-- Select JOB Modal (same UX as Job Card → Select QTN) -->
+<div id="siJobModal" class="popup-overlay erp-search" style="display:none;">
+    <div class="erp-search-dialog xl" role="dialog" aria-modal="true">
+        <div class="erp-search-head">
+            <h4 class="erp-search-title"><i class="fa fa-search"></i>Select Job Card</h4>
+            <div class="erp-search-actions">
+                <label class="erp-search-check">
+                    <input type="checkbox" id="siJobAllBranch" checked onchange="siSearchJobDocs()"> All Branch
+                </label>
+                <button type="button" class="erp-search-btn primary sm" onclick="siAddFromJob()">Add</button>
+                <button type="button" class="erp-search-close" onclick="siCloseSelectJob()" title="Close" aria-label="Close"><i class="fa fa-times"></i></button>
+            </div>
+        </div>
+        <div class="erp-search-panes">
+            <div class="erp-search-pane">
+                <div class="erp-search-pane-head">
+                    <div class="erp-search-input">
+                        <i class="fa fa-search"></i>
+                        <input type="text" id="siJobSearch" autocomplete="off" placeholder="Search Job Card No..." onkeyup="siSearchJobDocs()">
+                    </div>
+                </div>
+                <div class="erp-search-body">
+                    <table class="erp-search-table" id="siJobDocsTable">
+                        <thead>
+                            <tr>
+                                <th>Job No</th>
+                                <th>Date</th>
+                            </tr>
+                        </thead>
+                        <tbody style="cursor:pointer;"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="erp-search-pane wide">
+                <div class="erp-search-pane-head">
+                    <h6 class="erp-search-pane-title" id="siJobTitle">Select a Job Card document</h6>
+                </div>
+                <div class="erp-search-body">
+                    <table class="erp-search-table" id="siJobItemsTable">
+                        <thead>
+                            <tr>
+                                <th style="min-width:40px;">No</th>
+                                <th style="min-width:90px;">Item Code</th>
+                                <th style="min-width:160px;">Item Description</th>
+                                <th style="min-width:70px;">Bal Qty</th>
+                                <th style="min-width:50px;">Unit</th>
+                                <th style="text-align:center;min-width:36px;"><input type="checkbox" id="siJobAll" onchange="siToggleAllJob(this)"></th>
+                                <th style="min-width:100px;">Qty</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td colspan="7" class="text-center text-muted p-3">Select a document from the left panel</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
 <!-- Customer Search Modal -->
 <div id="customerSearchModal" class="popup-overlay erp-search" style="display:none;">
@@ -1147,6 +1486,10 @@ $si_self_url = '/' . ltrim(
 <script>
     // URL to this file for AJAX calls — set by PHP above, works standalone and via invoice.php container
     var _siHeaderSelf = '<?php echo htmlspecialchars($si_self_url); ?>';
+    var siJobDoc = null;
+    var siJobItems = [];
+    var siJobHeader = null;
+    var siJobTimer = null;
 
     let customerSearchTimeout;
     let _moreFieldName = '';
@@ -1469,12 +1812,201 @@ $si_self_url = '/' . ltrim(
     // Guard allows this fragment to also work standalone if needed.
     window.erpToolbar = window.erpToolbar || {};
 
+    // ── Select JOB ──────────────────────────────────────────────────────────
+    function siJobPost(params) {
+        var fd = new FormData();
+        Object.keys(params).forEach(function (k) { fd.append(k, params[k]); });
+        return fetch(_siHeaderSelf, { method: 'POST', body: fd, credentials: 'same-origin' })
+            .then(function (r) {
+                if (!r.ok) throw new Error('Server returned ' + r.status);
+                return r.json();
+            });
+    }
+    function siJobEsc(v) {
+        return String(v == null ? '' : v)
+            .replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+            .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+    function siOpenSelectJob() {
+        var ac = String((document.getElementById('acCodeInput') || {}).value || '').trim();
+        if (!ac) {
+            alert('Please select a Customer before choosing a Job Card.');
+            return;
+        }
+        siJobDoc = null;
+        siJobItems = [];
+        siJobHeader = null;
+        document.getElementById('siJobSearch').value = '';
+        document.getElementById('siJobTitle').textContent = 'Select a Job Card document';
+        document.getElementById('siJobAll').checked = false;
+        document.querySelector('#siJobItemsTable tbody').innerHTML =
+            '<tr><td colspan="7" class="text-center text-muted p-3">Select a document from the left panel</td></tr>';
+        document.getElementById('siJobModal').style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+        siSearchJobDocs();
+    }
+    function siCloseSelectJob() {
+        document.getElementById('siJobModal').style.display = 'none';
+        document.body.style.overflow = '';
+    }
+    function siSearchJobDocs() {
+        clearTimeout(siJobTimer);
+        siJobTimer = setTimeout(function () {
+            var tbody = document.querySelector('#siJobDocsTable tbody');
+            var ac = String((document.getElementById('acCodeInput') || {}).value || '').trim();
+            tbody.innerHTML = '<tr><td colspan="2" class="text-center p-3">Loading...</td></tr>';
+            siJobPost({
+                action: 'si_pending_jobs',
+                ac_code: ac,
+                term: document.getElementById('siJobSearch').value,
+                all_branch: document.getElementById('siJobAllBranch').checked ? '1' : '0'
+            }).then(function (docs) {
+                tbody.innerHTML = '';
+                if (docs && docs.error) {
+                    tbody.innerHTML = '<tr><td colspan="2" class="text-center p-3 text-danger">' + siJobEsc(docs.error) + '</td></tr>';
+                    return;
+                }
+                if (!Array.isArray(docs) || !docs.length) {
+                    tbody.innerHTML = '<tr><td colspan="2" class="text-center p-3">No pending job cards for this customer</td></tr>';
+                    return;
+                }
+                docs.forEach(function (doc) {
+                    var tr = document.createElement('tr');
+                    tr.innerHTML = '<td>' + siJobEsc(doc.doc_no) + '</td><td>' + siJobEsc(doc.doc_dt) + '</td>';
+                    tr.onclick = function () { siSelectJobDoc(doc, tr); };
+                    tbody.appendChild(tr);
+                });
+            }).catch(function (err) {
+                console.error('Pending JOB error:', err);
+                tbody.innerHTML = '<tr><td colspan="2" class="text-center p-3 text-danger">Network or parsing error</td></tr>';
+            });
+        }, 300);
+    }
+    function siSelectJobDoc(doc, row) {
+        siJobDoc = doc;
+        document.querySelectorAll('#siJobDocsTable tbody tr').forEach(function (r) {
+            var on = (r === row);
+            r.style.backgroundColor = on ? 'var(--primary)' : '';
+            r.style.color = on ? 'white' : '';
+        });
+        document.getElementById('siJobTitle').textContent = 'Job Card ' + doc.doc_no;
+        document.getElementById('siJobAll').checked = false;
+        var tbody = document.querySelector('#siJobItemsTable tbody');
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center p-3">Loading...</td></tr>';
+        siJobPost({
+            action: 'si_pending_job_items',
+            doc_no: doc.doc_no,
+            all_branch: document.getElementById('siJobAllBranch').checked ? '1' : '0',
+            branch: document.getElementById('siJobAllBranch').checked ? '%' : <?php echo json_encode($branch_code); ?>
+        }).then(function (payload) {
+            tbody.innerHTML = '';
+            if (payload && payload.error) {
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center p-3 text-danger">' + siJobEsc(payload.error) + '</td></tr>';
+                return;
+            }
+            if (Array.isArray(payload)) {
+                siJobHeader = null;
+                siJobItems = payload;
+            } else {
+                siJobHeader = (payload && payload.header) ? payload.header : null;
+                siJobItems = (payload && Array.isArray(payload.items)) ? payload.items : [];
+            }
+            if (!siJobItems.length) {
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center p-3">No pending items for this job card</td></tr>';
+                return;
+            }
+            siJobItems.forEach(function (item, i) {
+                var tr = document.createElement('tr');
+                tr.innerHTML = '<td>' + siJobEsc(item.item_no) + '</td>'
+                    + '<td>' + siJobEsc(item.item_code) + '</td>'
+                    + '<td>' + siJobEsc(item.item_name) + '</td>'
+                    + '<td class="text-right">' + Number(item.balance || 0).toFixed(2) + '</td>'
+                    + '<td>' + siJobEsc(item.unit) + '</td>'
+                    + '<td class="text-center"><input type="checkbox" class="si-job-chk" value="' + i + '" onchange="siJobCheck(this)"></td>'
+                    + '<td style="padding:4px;"><input type="number" class="form-input-custom si-job-qty text-center" value="0.00" min="0" step="0.01" style="width:90px;padding:2px;"></td>';
+                tbody.appendChild(tr);
+            });
+        }).catch(function (err) {
+            console.error('Pending JOB items error:', err);
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center p-3 text-danger">Network or parsing error</td></tr>';
+        });
+    }
+    function siJobCheck(chk) {
+        var qty = chk.closest('tr').querySelector('.si-job-qty');
+        if (chk.checked && !(parseFloat(qty.value) > 0)) {
+            qty.value = Number(siJobItems[chk.value].balance || 0).toFixed(2);
+        }
+    }
+    function siToggleAllJob(src) {
+        document.querySelectorAll('.si-job-chk').forEach(function (chk) {
+            chk.checked = src.checked;
+            siJobCheck(chk);
+        });
+    }
+    function siApplyJobHeader(hdr) {
+        if (!hdr || typeof hdr !== 'object') return;
+        var jobEl = document.getElementById('siJobNoInput') || document.querySelector('input[name="job_no"]');
+        if (jobEl && (hdr.job_no || (siJobDoc && siJobDoc.doc_no))) {
+            jobEl.value = hdr.job_no || siJobDoc.doc_no;
+        }
+        var subj = document.querySelector('input[name="subject"]');
+        if (subj && hdr.subject != null && String(hdr.subject).trim() !== '') {
+            subj.value = String(hdr.subject);
+        }
+        var qtn = document.querySelector('input[name="qtn_no"]');
+        if (qtn && hdr.qtn_no != null && String(hdr.qtn_no).trim() !== '') {
+            qtn.value = String(hdr.qtn_no);
+        }
+        var days = document.getElementById('siPaymentDaysInput') || document.querySelector('input[name="payment_days"]');
+        if (days && hdr.payment_days != null && hdr.payment_days !== '') {
+            days.value = hdr.payment_days;
+        }
+    }
+    function siAddFromJob() {
+        var picked = [];
+        var bad = '';
+        var hdrQtn = (siJobHeader && siJobHeader.qtn_no) ? siJobHeader.qtn_no : '';
+        document.querySelectorAll('.si-job-chk:checked').forEach(function (chk) {
+            var item = siJobItems[chk.value];
+            var qty = parseFloat(chk.closest('tr').querySelector('.si-job-qty').value) || 0;
+            if ((qty <= 0 || qty > item.balance + 0.0001) && !bad) {
+                bad = (item.item_code || item.item_no) + ': enter a quantity between 0 and ' + Number(item.balance || 0).toFixed(2) + '.';
+            }
+            picked.push({
+                item_code: item.item_code || '',
+                item_desc: item.item_name || '',
+                item_no: item.item_no || '',
+                unit: item.unit || '',
+                qty: qty,
+                rate: item.rate || 0,
+                vat: item.vat || 0,
+                remark: item.remark || '',
+                qtn_no: item.qtn_no || hdrQtn || '',
+                job_no: item.doc_no || (siJobDoc ? siJobDoc.doc_no : '')
+            });
+        });
+        if (!picked.length) { alert('Please select at least one item'); return; }
+        if (bad) { alert(bad); return; }
+        siApplyJobHeader(siJobHeader || { job_no: siJobDoc ? siJobDoc.doc_no : '' });
+        if (typeof siApplyJobLines === 'function') {
+            siApplyJobLines(picked);
+        } else {
+            alert('Detail screen is not ready to receive job card lines.');
+            return;
+        }
+        siCloseSelectJob();
+    }
+
     // SAVE — submit the header form
     window.erpToolbar.onSave = function () {
         // Collect detail lines from the detail fragment before submitting
         if (typeof getDetailLinesJson === 'function') {
             var jsonField = document.getElementById('detailLinesJson');
             if (jsonField) jsonField.value = getDetailLinesJson();
+        }
+        if (typeof getVariableTermsJson === 'function') {
+            var vtField = document.getElementById('variableTermsJson');
+            if (vtField) vtField.value = getVariableTermsJson();
         }
         var btn = document.querySelector('[name="save_si"]');
         if (btn) {
@@ -1542,6 +2074,11 @@ $si_self_url = '/' . ltrim(
             acCodeEl.setAttribute('onclick', 'openCustomerSearch()');
             acCodeEl.style.cursor = 'pointer';
         }
+        var jobBtn = document.getElementById('siSelectJobBtn');
+        if (jobBtn) jobBtn.disabled = false;
+        if (typeof erpSetVariableTermsReadonly === 'function') {
+            erpSetVariableTermsReadonly(false);
+        }
         // Unlock editable detail-line inputs (account[] stays readonly)
         ['qty[]','rate[]','excise_rate[]','discount_pct[]','discount_amt[]','item_code[]'].forEach(function(n) {
             document.querySelectorAll('#detailTableBody input[name="' + n + '"]').forEach(function(el) {
@@ -1553,11 +2090,37 @@ $si_self_url = '/' . ltrim(
             });
         });
         // Show delete buttons per row and re-enable the detail toolbar buttons
-        document.querySelectorAll('#detailTableBody .btn-danger').forEach(function(btn) { btn.style.display = ''; });
+        document.querySelectorAll('#detailTableBody .btn-danger, #detailTableBody .si02-del').forEach(function(btn) { btn.style.display = ''; });
         document.querySelectorAll('.detail-toolbar .detail-btn').forEach(function(btn) { btn.disabled = false; btn.style.removeProperty('opacity'); });
         if (typeof erpToolbarSetState === 'function') {
             erpToolbarSetState({ save: true, edit: false, cancel: true });
         }
+    };
+
+    // DELETE — toolbar gate (allow_delete=Y) then remove detail + header
+    window.erpToolbar.onDeleteConfirmed = function () {
+        var docNo = String((document.querySelector('input[name="doc_no"]') || {}).value || '').trim();
+        if (!docNo) {
+            alert('Document number is missing.');
+            return;
+        }
+        var fd = new FormData();
+        fd.append('action', 'si_delete_document');
+        fd.append('doc_no', docNo);
+        fetch(_siHeaderSelf, { method: 'POST', body: fd, credentials: 'same-origin' })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (data && data.success) {
+                    alert('Document deleted.');
+                    window.location.href = erpNavUrl('doc_type=' + encodeURIComponent(window.ERP_DOC_TYPE || ''));
+                    return;
+                }
+                alert((data && data.error) ? data.error : 'Delete failed.');
+            })
+            .catch(function (err) {
+                console.error('SI delete error:', err);
+                alert('Delete failed. Please try again.');
+            });
     };
 
     // CANCEL — discard unsaved changes by reloading the page

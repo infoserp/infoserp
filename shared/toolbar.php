@@ -8,6 +8,7 @@
  *   $is_view_mode     (bool)   - true = viewing saved doc → SAVE disabled
  *   $close_url        (string) - URL for the CLOSE button. Default: dashboard in iframe shell
  *   $user_allow_edit  (string) - 'Y' enables the EDIT button; anything else disables it
+ *   $user_allow_delete(string) - 'Y' enables the DELETE button; anything else disables it
  *   $prev_doc_no      (string) - doc_no of the previous document (enables PRIOR button)
  *   $next_doc_no      (string) - doc_no of the next document (NEXT navigates there, or NEW if empty)
  *   $selected_doc_type(string) - current doc type code (used by NEXT to open new doc of same type)
@@ -35,6 +36,7 @@ $is_view_mode      = $is_view_mode      ?? false;
 $close_url         = $close_url         ?? erp_iframe_url('dashboard');
 $shell_home_url    = erp_shell_url();
 $user_allow_edit   = $user_allow_edit   ?? 'Y';
+$user_allow_delete = $user_allow_delete ?? 'Y';
 $prev_doc_no       = $prev_doc_no       ?? '';
 $next_doc_no       = $next_doc_no       ?? '';
 $selected_doc_type = $selected_doc_type ?? '';
@@ -122,7 +124,8 @@ $tb_close_attr     = htmlspecialchars($close_url, ENT_QUOTES, 'UTF-8');
                 <button type="button" role="menuitem" id="tbReport" onclick="erpToolbarAction('report')"><i class="fa fa-file-excel-o"></i>Export report</button>
                 <hr>
                 <button type="button" role="menuitem" class="tb-danger" id="tbCancel" onclick="erpToolbarAction('cancel')"><i class="fa fa-ban"></i>Cancel</button>
-                <button type="button" role="menuitem" class="tb-danger" id="tbDelete" onclick="erpToolbarAction('delete')"><i class="fa fa-trash-o"></i>Delete</button>
+                <button type="button" role="menuitem" class="tb-danger" id="tbDelete" onclick="erpToolbarAction('delete')"
+                        <?php echo ($user_allow_delete !== 'Y') ? 'disabled title="Delete not allowed for your account"' : 'title="Delete document"'; ?>><i class="fa fa-trash-o"></i>Delete</button>
             </div>
         </div>
 
@@ -381,11 +384,37 @@ function erpOpenEditPassword() {
         alert('You are already in edit mode.');
         return;
     }
+    var pwdTitle = document.querySelector('#erpEditPasswordModal h4');
+    if (pwdTitle) pwdTitle.textContent = 'Enter Edit Password';
     document.getElementById('erpEditPasswordModal').style.display = 'flex';
     document.body.style.overflow = 'hidden';
     var inp = document.getElementById('erpEditPasswordInput');
     inp.value = '';
     inp.focus();
+}
+
+/** Delete gate: allow_delete=Y (button enabled) → confirm → module deletes header + detail. */
+function erpRequestDelete() {
+    var delBtn = document.getElementById('tbDelete');
+    if (delBtn && delBtn.disabled) {
+        alert('You do not have permission to delete.');
+        return;
+    }
+    var docNo = (typeof window.ERP_DOC_NO !== 'undefined') ? String(window.ERP_DOC_NO || '').trim() : '';
+    if (!docNo) {
+        var dn = document.querySelector('input[name="doc_no"]');
+        docNo = dn ? String(dn.value || '').trim() : '';
+    }
+    if (!docNo) {
+        alert('Open a saved document before deleting.');
+        return;
+    }
+    if (!confirm('Delete this document permanently? Header and detail lines will be removed.')) return;
+    if (typeof window.erpToolbar.onDeleteConfirmed === 'function') {
+        window.erpToolbar.onDeleteConfirmed();
+    } else {
+        alert('Delete is not configured for this document.');
+    }
 }
 
 function erpCloseEditPassword() {
@@ -403,17 +432,18 @@ function erpVerifyEditPassword() {
     fetch('../../verify_edit_password.php', { method: 'POST', body: fd })
         .then(function (r) { return r.json(); })
         .then(function (data) {
-            if (data.success) {
-                erpCloseEditPassword();
-                // Notify the active module to unlock its form
-                if (typeof window.erpToolbar.onEditVerified === 'function') {
-                    window.erpToolbar.onEditVerified();
-                }
-                if (typeof erpToolbarSetState === 'function') {
-                    erpToolbarSetState({ save: true, edit: false, cancel: true });
-                }
-            } else {
+            if (!data.success) {
                 alert(data.message || 'Invalid password.');
+                return;
+            }
+            erpCloseEditPassword();
+
+            // Edit unlock
+            if (typeof window.erpToolbar.onEditVerified === 'function') {
+                window.erpToolbar.onEditVerified();
+            }
+            if (typeof erpToolbarSetState === 'function') {
+                erpToolbarSetState({ save: true, edit: false, cancel: true });
             }
         })
         .catch(function (err) {
@@ -442,7 +472,8 @@ window.erpToolbar = window.erpToolbar || {};
         onSave:        function () {},
         onFind:        function () { erpOpenDocSearch(); },
         onEdit:        function () { erpOpenEditPassword(); },
-        onDelete:      function () {},
+        onDelete:      function () { erpRequestDelete(); },
+        onDeleteConfirmed: function () {},
         onPreview:     function () {},
         onPrint:       function () {},
         onSelect:      function () {},

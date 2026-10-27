@@ -201,7 +201,7 @@ if ($doc_no !== '') {
     <title><?php echo htmlspecialchars($doc_type_name . ' (' . $doc_code . ')'); ?></title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link href="//maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" rel="stylesheet">
-    <link href="../../vendor/font-awesome/css/font-awesome.min.css" rel="stylesheet" type="text/css">
+    <link href="<?php echo htmlspecialchars(erp_font_awesome_href(), ENT_QUOTES, 'UTF-8'); ?>" rel="stylesheet" type="text/css">
     <link rel="stylesheet" href="../../material_request.css?v=5">
     <link rel="stylesheet" href="../../assets/css/erp_document.css?v=26">
 </head>
