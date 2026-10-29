@@ -1948,21 +1948,30 @@ body.compact .doc-panel { padding: 10px 14px 12px; }
 }
 @media (min-width: 1100px) {
     .si02-grid { grid-template-columns: repeat(12, minmax(0, 1fr)); }
-    .si02-code { grid-column: span 2; }
-    .si02-desc { grid-column: span 4; }
-    .si02-field { grid-column: span 2; }
-    .si02-disc { grid-column: span 2; }
-    .si02-net { grid-column: span 2; }
+    /* Default (Discount / VAT / Net): 2 cols. Narrow code/qty/unit/rate/amount; widen description. */
+    .si02-grid > .si02-field { grid-column: span 2; }
+    .si02-grid > .si02-code { grid-column: span 1; }
+    .si02-grid > .si02-desc { grid-column: span 7; }
+    .si02-grid > .si02-qty,
+    .si02-grid > .si02-unit,
+    .si02-grid > .si02-rate,
+    .si02-grid > .si02-amt { grid-column: span 1; }
+    .si02-grid > .si02-disc { grid-column: span 2; }
+    .si02-grid > .si02-net { grid-column: span 2; }
+}
+@media (min-width: 768px) and (max-width: 1099.98px) {
+    .si02-grid > .si02-desc { grid-column: span 2; }
 }
 .si02-field { min-width: 0; }
 .si02-desc-row,
 .si02-disc-row,
 .si02-remark-row {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 8px;
     min-width: 0;
 }
+.si02-desc-row .si02-btn-ghost { margin-top: 0; align-self: flex-start; }
 .si02-desc-row .si-desc { flex: 1 1 auto; min-width: 0; }
 .si02-disc-row > input:first-child { flex: 0 0 64px; width: 64px; }
 .si02-disc-row > input:last-child { flex: 1 1 auto; min-width: 0; }

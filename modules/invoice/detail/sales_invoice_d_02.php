@@ -87,19 +87,19 @@ if (!function_exists('si02_line_card_html')) {
         <button type="button" class="si02-btn-ghost" tabindex="-1" onclick="si02OpenDescMore(this)">More..</button>
       </div>
     </div>
-    <div class="si02-field">
+    <div class="si02-field si02-qty">
       <label class="si02-lbl">Qty</label>
       <input type="number" class="form-control form-control-sm detail-input si02-num" name="qty[]" value="' . si02_h($o['qty'] ?? '0') . '" ' . $ro . '>
     </div>
-    <div class="si02-field">
+    <div class="si02-field si02-unit">
       <label class="si02-lbl">Unit</label>
       <input type="text" class="form-control form-control-sm detail-input si02-ro" name="unit[]" value="' . si02_h($o['unit'] ?? '') . '" placeholder="Unit" readonly>
     </div>
-    <div class="si02-field">
+    <div class="si02-field si02-rate">
       <label class="si02-lbl">Rate</label>
       <input type="number" class="form-control form-control-sm detail-input si02-num" name="rate[]" value="' . si02_h($o['rate'] ?? '0.00') . '" step="0.01" ' . $ro . '>
     </div>
-    <div class="si02-field">
+    <div class="si02-field si02-amt">
       <label class="si02-lbl">Amount</label>
       <input type="text" class="form-control form-control-sm detail-input si-amount si02-ro si02-num" name="total[]" value="' . si02_h($o['amount'] ?? '0.00') . '" readonly>
     </div>
@@ -840,10 +840,10 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
             + '<div class="si02-field si02-desc"><label class="si02-lbl">Description</label><div class="si02-desc-row">'
             + '<textarea class="form-control form-control-sm detail-input si-desc" name="item_desc[]" rows="1">' + siEsc(data.item_desc || '') + '</textarea>'
             + '<button type="button" class="si02-btn-ghost" tabindex="-1" onclick="si02OpenDescMore(this)">More..</button></div></div>'
-            + '<div class="si02-field"><label class="si02-lbl">Qty</label><input type="number" class="form-control form-control-sm detail-input si02-num" name="qty[]" value="' + qty + '"></div>'
-            + '<div class="si02-field"><label class="si02-lbl">Unit</label><input type="text" class="form-control form-control-sm detail-input si02-ro" name="unit[]" value="' + siEsc(data.unit || '') + '" readonly></div>'
-            + '<div class="si02-field"><label class="si02-lbl">Rate</label><input type="number" class="form-control form-control-sm detail-input si02-num" name="rate[]" value="' + rate.toFixed(2) + '" step="0.01"></div>'
-            + '<div class="si02-field"><label class="si02-lbl">Amount</label><input type="text" class="form-control form-control-sm detail-input si-amount si02-ro si02-num" name="total[]" value="' + amount.toFixed(2) + '" readonly></div>'
+            + '<div class="si02-field si02-qty"><label class="si02-lbl">Qty</label><input type="number" class="form-control form-control-sm detail-input si02-num" name="qty[]" value="' + qty + '"></div>'
+            + '<div class="si02-field si02-unit"><label class="si02-lbl">Unit</label><input type="text" class="form-control form-control-sm detail-input si02-ro" name="unit[]" value="' + siEsc(data.unit || '') + '" readonly></div>'
+            + '<div class="si02-field si02-rate"><label class="si02-lbl">Rate</label><input type="number" class="form-control form-control-sm detail-input si02-num" name="rate[]" value="' + rate.toFixed(2) + '" step="0.01"></div>'
+            + '<div class="si02-field si02-amt"><label class="si02-lbl">Amount</label><input type="text" class="form-control form-control-sm detail-input si-amount si02-ro si02-num" name="total[]" value="' + amount.toFixed(2) + '" readonly></div>'
             + '<div class="si02-field si02-disc"><label class="si02-lbl">Discount</label><div class="si02-disc-row">'
             + '<input type="number" class="form-control form-control-sm detail-input si02-num" name="discount_pct[]" value="0.00" step="0.01" placeholder="%">'
             + '<input type="number" class="form-control form-control-sm detail-input si02-num" name="discount_amt[]" value="0.00" step="0.01" placeholder="Amt"></div></div>'
