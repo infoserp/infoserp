@@ -44,7 +44,8 @@ if ($doc_no === '' || !ctype_alnum($doc_code) || !ctype_alnum($doc_type)) {
             include $print_format_path;
             $sheets_html = ob_get_clean();
         }
-    } catch (Exception $e) {
+    } catch (Throwable $e) {
+        // Catch Error too (e.g. undefined function on older PHP) — Exception alone leaves a blank iframe
         while (isset($ob_level) && ob_get_level() > $ob_level) {
             ob_end_clean();
         }

@@ -3,6 +3,26 @@
  * Application root path helpers — correct asset URLs from any page / public URL.
  */
 
+/* PHP 7.1 compat — array_key_first / array_key_last arrived in 7.3 */
+if (!function_exists('array_key_first')) {
+    function array_key_first(array $arr)
+    {
+        foreach ($arr as $key => $_) {
+            return $key;
+        }
+        return null;
+    }
+}
+if (!function_exists('array_key_last')) {
+    function array_key_last(array $arr)
+    {
+        $key = null;
+        foreach ($arr as $key => $_) {
+        }
+        return $key;
+    }
+}
+
 if (!function_exists('erp_base_path')) {
     function erp_base_path() {
         static $base = null;
