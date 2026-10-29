@@ -9,6 +9,7 @@ if (!isset($con)) {
     require('../../../db.php');
     include('../../../auth.php');
 }
+require_once __DIR__ . '/../../../includes/erp_paths.php';
 
 $owns_output_buffer = !isset($con);
 if ($owns_output_buffer) {
@@ -18,6 +19,15 @@ if ($owns_output_buffer) {
 $company_code = $_SESSION['company_code'] ?? '';
 $branch_code  = $_SESSION['branch_code']  ?? '';
 $user         = $_SESSION['username']     ?? '';
+
+$si02_item_location = '';
+try {
+    $stmt_loc = $con->prepare("SELECT location_code FROM branch_user WHERE user_id = ? AND branch_code = ?");
+    $stmt_loc->execute([$user, $branch_code]);
+    $si02_item_location = trim((string) ($stmt_loc->fetchColumn() ?: ''));
+} catch (Exception $e) {
+    error_log('SI02 location fetch error: ' . $e->getMessage());
+}
 
 if (!function_exists('si02_h')) {
     function si02_h($v)
@@ -73,7 +83,7 @@ if (!function_exists('si02_line_card_html')) {
     <div class="si02-field si02-desc">
       <label class="si02-lbl">Description</label>
       <div class="si02-desc-row">
-        <input type="text" class="form-control form-control-sm detail-input si-desc" name="item_desc[]" value="' . si02_h($o['item_desc'] ?? '') . '" placeholder="Description" ' . $ro . '>
+        <textarea class="form-control form-control-sm detail-input si-desc" name="item_desc[]" rows="1" placeholder="Description" ' . $ro . '>' . si02_h($o['item_desc'] ?? '') . '</textarea>
         <button type="button" class="si02-btn-ghost" tabindex="-1" onclick="si02OpenDescMore(this)">More..</button>
       </div>
     </div>
@@ -214,26 +224,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     if ($owns_output_buffer && ob_get_level() > 0) {
         ob_end_clean();
     }
-    header('Content-Type: application/json');
-    $user_id = $_SESSION['username'] ?? '';
-    $term    = '%' . trim($_POST['term'] ?? '') . '%';
+    header('Content-Type: application/json; charset=utf-8');
+    $term = '%' . trim($_POST['term'] ?? '') . '%';
+    $loc  = trim($_POST['location'] ?? $si02_item_location);
     try {
-        $sql = "SELECT ils.itemcode,
-                       im.item_name,
-                       im.stock_unit,
-                       im.tax_amount,
-                       ils.stockqty,
-                       bu.location_code,
+        // Same approach as Stock Transfer Out: item_master with optional stock
+        $sql = "SELECT TOP 200 i.item_code AS itemcode,
+                       i.item_name,
+                       i.stock_unit,
+                       i.oem_code,
+                       ISNULL(v.stockqty, 0) AS stockqty,
                        ISNULL((SELECT TOP 1 retail_price FROM item_price
-                                WHERE item_code = ils.itemcode), 0) AS retail_price
-                FROM branch_user bu
-                INNER JOIN view_item_ledger_summary ils ON ils.locationcode = bu.location_code
-                INNER JOIN item_master im ON im.item_code = ils.itemcode
-                WHERE bu.user_id = ? AND bu.branch_code = ?
-                AND (ils.itemcode LIKE ? OR im.item_name LIKE ?)";
+                                WHERE item_code = i.item_code), 0) AS retail_price
+                FROM item_master i
+                LEFT JOIN view_item_ledger_summary v
+                  ON i.item_code = v.itemcode AND v.locationcode = ?
+                WHERE i.item_code LIKE ? OR i.item_name LIKE ? OR ISNULL(i.oem_code, '') LIKE ?
+                ORDER BY i.item_code";
         $stmt = $con->prepare($sql);
-        $stmt->execute([$user_id, $branch_code, $term, $term]);
-        echo json_encode($stmt->fetchAll(PDO::FETCH_ASSOC));
+        $stmt->execute([$loc, $term, $term, $term]);
+        $items = [];
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $items[] = [
+                'itemcode'     => trim((string) $row['itemcode']),
+                'item_name'    => trim((string) ($row['item_name'] ?? '')),
+                'stock_unit'   => trim((string) ($row['stock_unit'] ?? '')),
+                'oem_code'     => trim((string) ($row['oem_code'] ?? '')),
+                'stockqty'     => (float) ($row['stockqty'] ?? 0),
+                'retail_price' => (float) ($row['retail_price'] ?? 0),
+                'location_code'=> $loc,
+            ];
+        }
+        echo json_encode($items);
     } catch (Exception $e) {
         error_log('SI02 Item search error: ' . $e->getMessage());
         echo json_encode(['error' => $e->getMessage()]);
@@ -438,8 +460,9 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
 </div>
 
 <script>
-    var SI02_DETAIL_URL = 'detail/sales_invoice_d_02.php';
-    var LOCATION_CODE = <?php echo json_encode($_SESSION['branch_code'] ?? ''); ?>;
+    var SI02_DETAIL_URL = <?php echo json_encode(erp_url('modules/invoice/detail/sales_invoice_d_02')); ?>;
+    var LOCATION_CODE = <?php echo json_encode($si02_item_location !== '' ? $si02_item_location : ($_SESSION['branch_code'] ?? '')); ?>;
+    var SI02_ITEM_LOC = <?php echo json_encode($si02_item_location); ?>;
     var ALLOW_ZERO_STOCK = <?php
         require_once __DIR__ . '/../../../includes/erp_user_access.php';
         echo json_encode(erp_user_allow_zero_stock($con));
@@ -603,7 +626,9 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
         var amount = Math.max(0, roundMoney(lineTotal - discountAmt));
         setInputValue(row, 'total[]', amount, 2);
 
-        var vatPct = getNumericInput(row, 'vat[]') || VAT_PCT;
+        // Honour 0% VAT when header/apply sets it
+        var vatEl = row.querySelector('input[name="vat[]"]');
+        var vatPct = vatEl ? (parseFloat(vatEl.value) || 0) : VAT_PCT;
         var vatAmount = roundMoney((amount * vatPct) / 100);
         setInputValue(row, 'vat_amount[]', vatAmount, 2);
 
@@ -652,7 +677,7 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
     }
     function si02OpenDescMore(btn) {
         var row = btn.closest('.detail-row');
-        _si02DescInput = row ? row.querySelector('input[name="item_desc[]"]') : null;
+        _si02DescInput = row ? row.querySelector('textarea[name="item_desc[]"], input[name="item_desc[]"]') : null;
         var ta = document.getElementById('si02DescText');
         ta.value = _si02DescInput ? _si02DescInput.value : '';
         ta.readOnly = !si02IsEditable() || (_si02DescInput && _si02DescInput.readOnly);
@@ -662,6 +687,7 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
     }
     function si02SaveDescMore() {
         if (_si02DescInput && !_si02DescInput.readOnly) {
+            // Keep exact line breaks from the More.. editor (same as Sales Quotation)
             _si02DescInput.value = document.getElementById('si02DescText').value;
         }
         si02CloseDescMore();
@@ -711,13 +737,15 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
         currentLineInput = null;
     }
     var itemSearchTimer;
+    var si02ItemResults = [];
     function doItemFetch(query) {
         var tbody = document.getElementById('itemResultsBody');
         tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:20px;color:#9ca3af;"><i class="fa fa-spinner fa-spin"></i> Loading...</td></tr>';
         var formData = new FormData();
         formData.append('action', 'search_items');
         formData.append('term', query);
-        fetch(SI02_DETAIL_URL, { method: 'POST', body: formData })
+        formData.append('location', SI02_ITEM_LOC || LOCATION_CODE || '');
+        fetch(SI02_DETAIL_URL, { method: 'POST', body: formData, credentials: 'same-origin' })
             .then(function (r) {
                 if (!r.ok) throw new Error('Server returned ' + r.status);
                 return r.json();
@@ -734,34 +762,41 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
     function renderItemResults(data) {
         var tbody = document.getElementById('itemResultsBody');
         if (data && data.error) {
-            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:20px;color:red;">Error: ' + data.error + '</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:20px;color:red;">Error: ' + siEsc(data.error) + '</td></tr>';
             return;
         }
         if (!Array.isArray(data) || data.length === 0) {
             tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:20px;color:#9ca3af;">No items found</td></tr>';
             return;
         }
-        tbody.innerHTML = data.map(function (item) {
-            var code = item.itemcode ? String(item.itemcode).replace(/'/g, "\\'") : '';
-            var name = item.item_name ? String(item.item_name).replace(/'/g, "\\'") : '';
-            var unit = item.stock_unit ? String(item.stock_unit).replace(/'/g, "\\'") : '';
-            var loc = item.location_code ? String(item.location_code).replace(/'/g, "\\'") : '';
-            var stock = item.stockqty || '0';
-            var rate = item.retail_price || '0';
+        si02ItemResults = data;
+        tbody.innerHTML = data.map(function (item, i) {
             return '<tr>'
-                + '<td>' + (item.itemcode || '') + '</td>'
-                + '<td>' + (item.item_name || '') + '</td>'
-                + '<td style="text-align:right;">' + stock + '</td>'
-                + '<td style="text-align:center;"><button type="button" class="btn btn-primary btn-sm" onclick="selectItem(\'' + code + '\',\'' + name + '\',\'' + unit + '\',\'' + stock + '\',\'' + rate + '\',\'' + loc + '\')"><i class="fa fa-check"></i> Select</button></td>'
+                + '<td>' + siEsc(item.itemcode || '') + '</td>'
+                + '<td>' + siEsc(item.item_name || '') + '</td>'
+                + '<td style="text-align:right;">' + (parseFloat(item.stockqty) || 0).toFixed(2) + '</td>'
+                + '<td style="text-align:center;"><button type="button" class="btn btn-primary btn-sm" onclick="selectItemIdx(' + i + ')"><i class="fa fa-check"></i> Select</button></td>'
                 + '</tr>';
         }).join('');
+    }
+    function selectItemIdx(i) {
+        var item = si02ItemResults[i];
+        if (!item) { closeItemSearch(); return; }
+        selectItem(
+            item.itemcode || '',
+            item.item_name || '',
+            item.stock_unit || '',
+            item.stockqty || 0,
+            item.retail_price || 0,
+            item.location_code || SI02_ITEM_LOC || LOCATION_CODE || ''
+        );
     }
     function selectItem(code, description, unit, stock, rate, locationCode) {
         if (!currentLineInput) return;
         var row = currentLineInput.closest('.detail-row');
         if (!row) return;
         var codeInput = row.querySelector('input[name="item_code[]"]');
-        var descInput = row.querySelector('input[name="item_desc[]"]');
+        var descInput = row.querySelector('textarea[name="item_desc[]"], input[name="item_desc[]"]');
         var unitInput = row.querySelector('input[name="unit[]"]');
         var stockInput = row.querySelector('input[name="stock[]"]');
         var rateInput = row.querySelector('input[name="rate[]"]');
@@ -803,7 +838,7 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
             + '<div class="si02-field si02-code"><label class="si02-lbl">Item Code</label>'
             + '<input type="text" class="form-control form-control-sm detail-input si-code" name="item_code[]" value="' + siEsc(data.item_code || '') + '" readonly style="cursor:pointer;" onfocus="openItemSearch(this)" onclick="openItemSearch(this)"></div>'
             + '<div class="si02-field si02-desc"><label class="si02-lbl">Description</label><div class="si02-desc-row">'
-            + '<input type="text" class="form-control form-control-sm detail-input si-desc" name="item_desc[]" value="' + siEsc(data.item_desc || '') + '">'
+            + '<textarea class="form-control form-control-sm detail-input si-desc" name="item_desc[]" rows="1">' + siEsc(data.item_desc || '') + '</textarea>'
             + '<button type="button" class="si02-btn-ghost" tabindex="-1" onclick="si02OpenDescMore(this)">More..</button></div></div>'
             + '<div class="si02-field"><label class="si02-lbl">Qty</label><input type="number" class="form-control form-control-sm detail-input si02-num" name="qty[]" value="' + qty + '"></div>'
             + '<div class="si02-field"><label class="si02-lbl">Unit</label><input type="text" class="form-control form-control-sm detail-input si02-ro" name="unit[]" value="' + siEsc(data.unit || '') + '" readonly></div>'
@@ -838,7 +873,8 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
         si02ClearEmpty();
         Array.prototype.slice.call(si02Rows()).forEach(function (tr) {
             var code = (tr.querySelector('input[name="item_code[]"]') || {}).value || '';
-            var desc = (tr.querySelector('input[name="item_desc[]"]') || {}).value || '';
+            var descNode = tr.querySelector('textarea[name="item_desc[]"], input[name="item_desc[]"]');
+            var desc = descNode ? descNode.value : '';
             var qty = parseFloat((tr.querySelector('input[name="qty[]"]') || {}).value) || 0;
             if (!String(code).trim() && !String(desc).trim() && qty === 0) tr.remove();
         });
@@ -856,7 +892,7 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
                 var qtyEl = existing.querySelector('input[name="qty[]"]');
                 var rateEl = existing.querySelector('input[name="rate[]"]');
                 var unitEl = existing.querySelector('input[name="unit[]"]');
-                var descEl = existing.querySelector('input[name="item_desc[]"]');
+                var descEl = existing.querySelector('textarea[name="item_desc[]"], input[name="item_desc[]"]');
                 if (qtyEl) qtyEl.value = p.qty;
                 if (rateEl) rateEl.value = Number(p.rate || 0).toFixed(2);
                 if (unitEl) unitEl.value = p.unit || '';
@@ -887,12 +923,13 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
                 return el ? el.value : '';
             }
             var code = val('item_code[]').trim();
-            var desc = val('item_desc[]').trim();
+            // Preserve internal line breaks; only trim outer whitespace (same as Sales Quotation)
+            var desc = String(val('item_desc[]') || '').replace(/^\s+|\s+$/g, '');
             var qty = parseFloat(val('qty[]')) || 0;
             if (code === '' && desc === '' && qty === 0) return;
             lines.push({
                 item_code: code,
-                item_desc: val('item_desc[]'),
+                item_desc: desc,
                 remark: val('item_remark[]'),
                 unit: val('unit[]'),
                 qty: val('qty[]'),

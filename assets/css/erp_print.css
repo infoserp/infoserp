@@ -7,6 +7,8 @@
  *   Print formats .... .pf-company, .pf-title, .pf-boxes / .pf-box, .pf-kv, .pf-narr,
  *                      .pf-items (.pf-fill, .pf-total), .pf-pageno, .pf-sign
  *   Invoice layout ... .pf-inv-sheet (.pf-inv-head / .pf-inv-body / .pf-inv-foot), .pf-inv-*
+ *   Invoice format 2 . .pf-inv2-sheet, .pf-inv2-*
+ *   Quotation layout . .pf-sq-sheet, .pf-sq-*
  *
  * Sheet and .pf-* rules are rendered by Dompdf too: keep them to tables, borders and
  * mm/pt units (no flex, grid or CSS variables).
@@ -470,6 +472,468 @@ html body.erp-print-page {
 }
 .pf-inv-body .pf-pageno {
     margin-top: 2mm;
+    font-size: 8pt;
+    color: #475569;
+}
+
+/* ════════════════════════════ Sales Quotation (pf-sq-*) ════════════════════════════
+ * Full-bleed letter header / footer bands (branch_master images, blank space when unset).
+ * Body details align to the same left/right edges as the QUOTATION header boxes.
+ */
+.erp-print-sheet.pf-sq-sheet {
+    padding: 0;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+}
+.erp-print-pdf .erp-print-sheet.pf-sq-sheet {
+    width: 210mm;
+    height: 296mm;
+}
+.pf-sq-head {
+    height: 38mm;
+    overflow: hidden;
+}
+.pf-sq-foot {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: 210mm;
+    height: 22mm;
+    overflow: hidden;
+}
+.pf-sq-head img,
+.pf-sq-foot img {
+    display: block;
+    width: 210mm;
+    height: 100%;
+}
+.pf-sq-head img { height: 38mm; }
+.pf-sq-foot img { height: 22mm; }
+.pf-sq-body {
+    padding: 2mm 12mm 0;
+}
+
+.pf-sq-title {
+    margin: 0 0 2.5mm;
+    text-align: center;
+    font-size: 14pt;
+    font-weight: bold;
+    letter-spacing: 1.5pt;
+    text-decoration: underline;
+    text-transform: uppercase;
+}
+.pf-sq-top {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    table-layout: fixed;
+}
+.pf-sq-top td.pf-sq-box {
+    width: 48%;
+    height: 28mm;
+    padding: 2mm 2.5mm;
+    vertical-align: top;
+    border: 1px solid #000;
+}
+.pf-sq-top td.pf-sq-gap {
+    width: 4%;
+    border: none;
+}
+.pf-sq-cust-name {
+    margin-bottom: 1mm;
+    font-size: 10pt;
+    font-weight: bold;
+}
+.pf-sq-cust-line {
+    margin-bottom: .6mm;
+    font-size: 8.5pt;
+    line-height: 1.3;
+}
+.pf-sq-kv {
+    width: 100%;
+    border-collapse: collapse;
+}
+.pf-sq-kv td {
+    padding: .55mm 0;
+    vertical-align: baseline;
+    font-size: 8.5pt;
+}
+.pf-sq-kv td.pf-k {
+    width: 22mm;
+    white-space: nowrap;
+}
+.pf-sq-kv td.pf-sep {
+    width: 3mm;
+    text-align: center;
+}
+.pf-sq-kv td.pf-v {
+    font-weight: bold;
+}
+
+/* Intro → table → totals → terms share the same width as the header boxes */
+.pf-sq-detail {
+    width: 100%;
+}
+
+.pf-sq-intro {
+    margin: 3mm 0 2.5mm;
+    font-size: 9pt;
+}
+
+.pf-items.pf-sq-items {
+    margin-top: 0;
+}
+.pf-sq-items th {
+    height: 6.5mm;
+    padding: 0 1.2mm;
+    font-size: 8pt;
+    font-weight: bold;
+    background: #fff;
+    border: 1px solid #000;
+}
+.pf-sq-items td {
+    height: 4.6mm;
+    padding: .6mm 1.2mm;
+    vertical-align: top;
+    border-left: 1px solid #000;
+    border-right: 1px solid #000;
+}
+.pf-sq-items td.wrap {
+    white-space: normal;
+    word-wrap: break-word;
+}
+.pf-sq-note {
+    margin-top: .8mm;
+    padding-left: 3mm;
+    font-size: 8pt;
+    line-height: 1.35;
+}
+
+.pf-sq-sum {
+    width: 100%;
+    margin-top: 1.5mm;
+    border-collapse: collapse;
+}
+.pf-sq-sum td.pf-sq-words {
+    padding: 1mm 3mm 1mm 0;
+    vertical-align: middle;
+    font-size: 9pt;
+    font-weight: bold;
+}
+.pf-sq-sum td.pf-sq-sum-panel {
+    width: 62mm;
+    vertical-align: top;
+}
+.pf-sq-sum-grid {
+    width: 100%;
+    border-collapse: collapse;
+}
+.pf-sq-sum-grid td {
+    padding: .7mm 1.5mm;
+    font-size: 9pt;
+    border: 1px solid #000;
+}
+.pf-sq-sum-grid td.pf-sq-sum-k {
+    width: 32mm;
+    font-weight: bold;
+}
+.pf-sq-sum-grid td.pf-sq-sum-v {
+    text-align: right;
+    font-weight: bold;
+}
+.pf-sq-sum-grid tr.pf-sq-net td {
+    font-size: 10pt;
+}
+
+.pf-sq-terms {
+    margin-top: 3.5mm;
+}
+.pf-sq-terms-title {
+    margin-bottom: 1.5mm;
+    font-size: 10pt;
+    font-weight: bold;
+    text-decoration: underline;
+}
+.pf-sq-term-group {
+    margin-bottom: 1.5mm;
+}
+.pf-sq-term-head {
+    margin-bottom: .6mm;
+    font-size: 9pt;
+    font-weight: bold;
+}
+.pf-sq-term-list {
+    margin: 0 0 0 5mm;
+    padding: 0;
+    list-style-type: disc;
+}
+.pf-sq-term-list li {
+    margin: 0 0 .4mm;
+    font-size: 8.5pt;
+    line-height: 1.35;
+}
+.pf-sq-b { font-weight: bold; }
+.pf-sq-i { font-style: italic; }
+.pf-sq-u { text-decoration: underline; }
+
+.pf-sq-close {
+    margin-top: 3.5mm;
+    font-size: 9pt;
+    line-height: 1.4;
+}
+
+.pf-sq-sign {
+    margin-top: 5mm;
+    font-size: 9pt;
+}
+.pf-sq-for {
+    font-weight: bold;
+}
+.pf-sq-sign-space {
+    height: 14mm;
+}
+.pf-sq-sign-name {
+    font-weight: bold;
+    text-transform: uppercase;
+}
+.pf-sq-sign-meta {
+    margin-top: .3mm;
+    font-size: 8.5pt;
+}
+
+.pf-sq-cont {
+    margin-top: 2mm;
+    font-size: 8.5pt;
+    font-style: italic;
+    color: #334155;
+}
+.pf-sq-body .pf-pageno {
+    margin-top: 2mm;
+    margin-bottom: 24mm;
+    font-size: 8pt;
+    color: #475569;
+}
+
+/* ════════════════════════════ Tax Invoice format 2 (pf-inv2-*) ════════════════════════════
+ * Full-bleed letter header / footer bands (branch_master images, blank when unset).
+ */
+.erp-print-sheet.pf-inv2-sheet {
+    padding: 0;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+}
+.erp-print-pdf .erp-print-sheet.pf-inv2-sheet {
+    width: 210mm;
+    height: 296mm;
+}
+.pf-inv2-head {
+    height: 38mm;
+    overflow: hidden;
+}
+.pf-inv2-foot {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: 210mm;
+    height: 22mm;
+    overflow: hidden;
+}
+.pf-inv2-head img,
+.pf-inv2-foot img {
+    display: block;
+    width: 210mm;
+    height: 100%;
+}
+.pf-inv2-head img { height: 38mm; }
+.pf-inv2-foot img { height: 22mm; }
+.pf-inv2-body {
+    padding: 2mm 10mm 0;
+}
+
+.pf-inv2-title-box {
+    padding: 2mm 0 1.5mm;
+    text-align: center;
+    border: 1px solid #000;
+}
+.pf-inv2-title {
+    font-size: 16pt;
+    font-weight: bold;
+    letter-spacing: 1.5pt;
+    text-transform: uppercase;
+}
+.pf-inv2-trn {
+    margin-top: 1mm;
+    font-size: 9pt;
+    font-weight: bold;
+}
+
+.pf-inv2-info {
+    width: 100%;
+    margin-top: 0;
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+.pf-inv2-info td.pf-inv2-info-l,
+.pf-inv2-info td.pf-inv2-info-r {
+    width: 50%;
+    padding: 1.5mm 2.5mm;
+    vertical-align: top;
+    border: 1px solid #000;
+    border-top: none;
+}
+.pf-inv2-kv {
+    width: 100%;
+    border-collapse: collapse;
+}
+.pf-inv2-kv td {
+    padding: .45mm 0;
+    vertical-align: top;
+    font-size: 8.5pt;
+}
+.pf-inv2-kv td.pf-k {
+    width: 24mm;
+    font-weight: bold;
+    white-space: nowrap;
+}
+.pf-inv2-kv td.pf-sep {
+    width: 3mm;
+    font-weight: bold;
+}
+.pf-inv2-kv td.pf-v {
+    font-weight: normal;
+}
+
+.pf-items.pf-inv2-items {
+    margin-top: 0;
+    table-layout: fixed;
+    border: 1px solid #000;
+    border-top: none;
+    border-bottom: none;
+}
+.pf-inv2-c-no    { width: 10mm; }
+.pf-inv2-c-desc  { width: auto; }
+.pf-inv2-c-qty   { width: 16mm; }
+.pf-inv2-c-price { width: 24mm; }
+.pf-inv2-c-amt   { width: 28mm; }
+.pf-inv2-c-bank  { width: auto; }
+.pf-inv2-items th {
+    height: 6.5mm;
+    padding: 0 1.2mm;
+    font-size: 8.5pt;
+    font-weight: bold;
+    background: #fff;
+    border: 1px solid #000;
+}
+.pf-inv2-items td {
+    height: 4.6mm;
+    padding: .6mm 1.2mm;
+    vertical-align: top;
+    border-left: 1px solid #000;
+    border-right: 1px solid #000;
+}
+.pf-inv2-items td.wrap {
+    white-space: normal;
+    word-wrap: break-word;
+}
+.pf-inv2-note {
+    margin-top: .6mm;
+    font-size: 8pt;
+    line-height: 1.3;
+}
+
+/* Bank + totals: Price/Amount column widths match the item table above */
+.pf-inv2-bottom {
+    width: 100%;
+    margin-top: 0;
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+.pf-inv2-bottom td.pf-inv2-bank {
+    padding: 2mm 2.5mm;
+    vertical-align: top;
+    border: 1px solid #000;
+}
+.pf-inv2-bottom td.pf-inv2-sum-k,
+.pf-inv2-bottom td.pf-inv2-sum-v {
+    padding: 0;
+    vertical-align: top;
+    border: 1px solid #000;
+    border-left: none;
+}
+.pf-inv2-bottom td.pf-inv2-sum-v {
+    border-left: 1px solid #000;
+}
+.pf-inv2-bank-title {
+    margin-bottom: 1.2mm;
+    font-size: 9pt;
+    font-weight: bold;
+    text-decoration: underline;
+}
+.pf-inv2-bank-kv {
+    width: 100%;
+    border-collapse: collapse;
+}
+.pf-inv2-bank-kv td {
+    padding: .4mm 0;
+    vertical-align: baseline;
+    font-size: 8pt;
+}
+.pf-inv2-bank-kv td.pf-k {
+    width: 28mm;
+    font-weight: bold;
+    white-space: nowrap;
+}
+.pf-inv2-bank-kv td.pf-sep {
+    width: 3mm;
+    font-weight: bold;
+}
+.pf-inv2-sum-line {
+    height: 6.5mm;
+    padding: 0 1.5mm;
+    line-height: 6.5mm;
+    font-size: 9pt;
+    font-weight: bold;
+    border-bottom: 1px solid #000;
+    white-space: nowrap;
+    overflow: hidden;
+}
+.pf-inv2-sum-v .pf-inv2-sum-line {
+    text-align: right;
+}
+.pf-inv2-sum-k .pf-inv2-sum-line:last-child,
+.pf-inv2-sum-v .pf-inv2-sum-line:last-child {
+    border-bottom: none;
+}
+.pf-inv2-sum-line.pf-inv2-net {
+    font-size: 10pt;
+}
+
+.pf-inv2-words {
+    margin-top: 0;
+    padding: 2mm 2.5mm;
+    font-size: 9pt;
+    font-weight: bold;
+    border: 1px solid #000;
+    border-top: none;
+}
+
+.pf-inv2-sign {
+    margin-top: 8mm;
+    font-size: 9pt;
+}
+.pf-inv2-for {
+    font-weight: bold;
+}
+
+.pf-inv2-cont {
+    margin-top: 2mm;
+    font-size: 8.5pt;
+    font-style: italic;
+    color: #334155;
+}
+.pf-inv2-body .pf-pageno {
+    margin-top: 2mm;
+    margin-bottom: 24mm;
     font-size: 8pt;
     color: #475569;
 }

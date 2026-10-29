@@ -33,7 +33,8 @@ if (isset($_GET['action']) && $_GET['action'] === 'search_customers') {
     try {
         $search_term = isset($_GET['term']) ? trim($_GET['term']) : '';
         $sql = "SELECT ac_master.ac_code, ac_master.description, ac_master.contact_name,
-                       ac_master.contact_no, ac_master.contact_email, ISNULL(ac_master.cr_days, 0) AS cr_days
+                       ac_master.contact_no, ac_master.contact_email, ISNULL(ac_master.cr_days, 0) AS cr_days,
+                       ISNULL(ac_master.salesman_code, '') AS salesman_code
                 FROM ac_master
                 WHERE (ac_master.company_code = ?)
                 AND (ac_master.child_exist = 'N')
@@ -58,12 +59,13 @@ if (isset($_GET['action']) && $_GET['action'] === 'search_customers') {
         $customers = [];
         while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
             $customers[] = [
-                'ac_code'       => trim($row['ac_code']),
-                'description'   => trim($row['description']),
-                'contact_name'  => trim($row['contact_name'] ?? ''),
-                'contact_no'    => trim($row['contact_no'] ?? ''),
-                'contact_email' => trim($row['contact_email'] ?? ''),
-                'cr_days'       => (float) ($row['cr_days'] ?? 0),
+                'ac_code'        => trim($row['ac_code']),
+                'description'    => trim($row['description']),
+                'contact_name'   => trim($row['contact_name'] ?? ''),
+                'contact_no'     => trim($row['contact_no'] ?? ''),
+                'contact_email'  => trim($row['contact_email'] ?? ''),
+                'cr_days'        => (float) ($row['cr_days'] ?? 0),
+                'salesman_code'  => trim((string) ($row['salesman_code'] ?? '')),
             ];
         }
         echo json_encode($customers);
@@ -327,7 +329,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_sq'])) {
                             : (string) ($idx + 1);
                         $d_unit = trim((string) ($line['unit'] ?? ''));
                         $d_code = trim((string) ($line['item_code'] ?? ''));
-                        $d_desc = trim((string) ($line['item_desc'] ?? ''));
+                        // Preserve internal line breaks in description; trim only ends
+                        $d_desc = preg_replace('/^\s+|\s+$/u', '', (string) ($line['item_desc'] ?? ''));
                         $d_remark = trim((string) ($line['remark'] ?? ''));
                         $stmt_d->execute([
                             $company_code,
@@ -464,9 +467,24 @@ $entered_by_date  = date('d/m/Y H:i');
 $modified_by_user = strtoupper($user);
 $modified_by_date = $entered_by_date;
 
-// Logged-in salesman
+// Salesman list (company) + default from logged-in user
+$salesmen = [];
 $salesman_code = '';
 $salesman_name = '';
+try {
+    $stmt_sm_list = $con->prepare(
+        "SELECT salesman_code, salesman_name FROM salesman WHERE company_code = ? ORDER BY salesman_name"
+    );
+    $stmt_sm_list->execute([$company_code]);
+    while ($row_sm_list = $stmt_sm_list->fetch(PDO::FETCH_ASSOC)) {
+        $salesmen[] = [
+            'code' => trim((string) $row_sm_list['salesman_code']),
+            'name' => trim((string) $row_sm_list['salesman_name']),
+        ];
+    }
+} catch (Exception $e) {
+    error_log('SQ Salesman list fetch error: ' . $e->getMessage());
+}
 try {
     $stmt_sm = $con->prepare(
         "SELECT s.salesman_code, s.salesman_name
@@ -713,8 +731,14 @@ $sq_self_url = '/' . ltrim(
                     </div>
                     <div class="doc-field">
                         <label class="doc-lbl">Sales Man</label>
-                        <input type="hidden" name="salesman_code" value="<?php echo htmlspecialchars($salesman_code); ?>">
-                        <input type="text" name="salesman" class="doc-inp" value="<?php echo htmlspecialchars($salesman_name); ?>" readonly>
+                        <select name="salesman_code" id="salesmanCodeSelect" class="doc-inp" <?php echo $is_view_mode ? 'disabled' : ''; ?>>
+                            <option value="">-- None --</option>
+                            <?php foreach ($salesmen as $_sm): ?>
+                            <option value="<?php echo htmlspecialchars($_sm['code']); ?>" <?php echo ($salesman_code === $_sm['code']) ? 'selected' : ''; ?>>
+                                <?php echo htmlspecialchars($_sm['name'] . ' (' . $_sm['code'] . ')'); ?>
+                            </option>
+                            <?php endforeach; ?>
+                        </select>
                     </div>
                     <div class="doc-field">
                         <label class="doc-lbl">Type</label>
@@ -777,7 +801,6 @@ $sq_self_url = '/' . ltrim(
                                 <input type="hidden" name="currency" id="currencyCode" value="<?php echo htmlspecialchars($currency); ?>">
                             <?php endif; ?>
                             <input type="text" name="currency_rate" id="currencyRate" class="doc-rate" value="<?php echo htmlspecialchars($currency_rate); ?>" <?php echo $is_view_mode ? 'readonly' : ''; ?>>
-                            <button type="button" class="doc-more" onclick="erpOpenVariableTerms()" title="Variable Terms">Variable Terms</button>
                         </div>
                     </div>
                 </div>
@@ -799,6 +822,29 @@ $sq_self_url = '/' . ltrim(
                         <div class="doc-inp-group">
                             <input type="text" name="project" class="doc-inp" value="<?php echo htmlspecialchars($project); ?>" <?php echo $is_view_mode ? 'readonly' : ''; ?>>
                             <button type="button" class="doc-more" onclick="openMoreModal('project','Project')">More..</button>
+                        </div>
+                    </div>
+                    <div class="doc-field">
+                        <label class="doc-lbl">Apply Discount</label>
+                        <div class="doc-sum-pair">
+                            <input type="number" name="apply_discount_pct" id="applyDiscountPct" class="doc-inp doc-inp-pct" value="" step="0.01" min="0" max="100"
+                                   placeholder="%" <?php echo $is_view_mode ? 'readonly' : ''; ?>
+                                   onchange="sqApplyHeaderDiscountPct()" onblur="sqApplyHeaderDiscountPct()">
+                            <input type="number" name="apply_discount_amt" id="applyDiscountAmt" class="doc-inp doc-inp-num" value="" step="0.01" min="0"
+                                   placeholder="Amt" <?php echo $is_view_mode ? 'readonly' : ''; ?>
+                                   onchange="sqApplyHeaderDiscountAmt()" onblur="sqApplyHeaderDiscountAmt()">
+                        </div>
+                    </div>
+                    <div class="doc-field">
+                        <label class="doc-lbl">Apply VAT %</label>
+                        <input type="number" name="apply_vat_pct" id="applyVatPct" class="doc-inp" value="" step="0.01" min="0"
+                               placeholder="Apply to all lines" <?php echo $is_view_mode ? 'readonly' : ''; ?>
+                               onchange="sqApplyHeaderVat()" onblur="sqApplyHeaderVat()">
+                    </div>
+                    <div class="doc-field">
+                        <label class="doc-lbl">Actions</label>
+                        <div class="doc-inp-group">
+                            <button type="button" class="doc-action-btn doc-action-terms" onclick="erpOpenVariableTerms()" title="Variable Terms"><i class="fa fa-file-text-o"></i> Variable Terms</button>
                         </div>
                     </div>
                 </div>
@@ -967,9 +1013,9 @@ $sq_self_url = '/' . ltrim(
     }
     function selectCustomerRow(i) {
         var c = customerSearchRows[i];
-        if (c) selectCustomer(c.ac_code, c.description, c.contact_name, c.contact_no, c.cr_days);
+        if (c) selectCustomer(c.ac_code, c.description, c.contact_name, c.contact_no, c.cr_days, c.salesman_code);
     }
-    function selectCustomer(ac_code, description, contact_name, contact_no, cr_days) {
+    function selectCustomer(ac_code, description, contact_name, contact_no, cr_days, salesman_code) {
         document.getElementById('acCodeInput').value = ac_code;
         document.querySelector('input[name="customer_name"]').value = description;
         document.querySelector('input[name="contact_name"]').value = contact_name || '';
@@ -979,7 +1025,159 @@ $sq_self_url = '/' . ltrim(
         } else {
             loadCustomerCrDays(ac_code);
         }
+        // Default salesman from ac_master when customer is selected (editable afterwards)
+        var smSel = document.getElementById('salesmanCodeSelect');
+        if (smSel && salesman_code) {
+            smSel.value = salesman_code;
+            if (smSel.value !== salesman_code) {
+                // Option missing from list — keep current selection
+            }
+        }
         closeCustomerSearch();
+    }
+
+    function sqRound2(n) {
+        return Math.round((Number(n) + Number.EPSILON) * 100) / 100;
+    }
+    function sqDetailRows() {
+        return Array.prototype.slice.call(document.querySelectorAll('#detailTableBody tr.detail-row'));
+    }
+    function sqLineGross(row) {
+        var qty = parseFloat((row.querySelector('input[name="qty[]"]') || {}).value) || 0;
+        var rate = parseFloat((row.querySelector('input[name="rate[]"]') || {}).value) || 0;
+        return sqRound2(qty * rate);
+    }
+    // Apply same % to every line (clears header discount amount)
+    function sqApplyHeaderDiscountPct() {
+        var el = document.getElementById('applyDiscountPct');
+        var amtEl = document.getElementById('applyDiscountAmt');
+        if (!el || el.readOnly || el.disabled) return;
+        var raw = String(el.value || '').trim();
+        if (raw === '') return;
+        if (amtEl) amtEl.value = '';
+        var pct = Math.min(100, Math.max(0, parseFloat(raw) || 0));
+        el.value = pct.toFixed(2);
+        sqDetailRows().forEach(function (row) {
+            var pctInp = row.querySelector('input[name="discount_pct[]"]');
+            var amtInp = row.querySelector('input[name="discount_amt[]"]');
+            if (!pctInp || pctInp.readOnly || pctInp.disabled) return;
+            pctInp.value = pct.toFixed(2);
+            if (amtInp && !amtInp.readOnly) amtInp.value = '0.00';
+        });
+        if (typeof updateSummary === 'function') updateSummary();
+    }
+    // Distribute header discount amount proportionally by line Amount
+    // Line Discount = (Line Amount / Total Detail Amount) × Header Discount Amount
+    function sqDistributeHeaderDiscountAmt() {
+        var el = document.getElementById('applyDiscountAmt');
+        if (!el) return false;
+        var raw = String(el.value || '').trim();
+        if (raw === '') return false;
+
+        var headerDisc = Math.max(0, parseFloat(raw) || 0);
+        el.value = headerDisc.toFixed(2);
+
+        var rows = sqDetailRows().filter(function (row) {
+            var amtInp = row.querySelector('input[name="discount_amt[]"]');
+            return amtInp && !amtInp.readOnly && !amtInp.disabled;
+        });
+        if (!rows.length) return true;
+
+        var amounts = rows.map(sqLineGross);
+        var totalAmt = amounts.reduce(function (s, n) { return s + n; }, 0);
+
+        if (totalAmt <= 0 || headerDisc <= 0) {
+            rows.forEach(function (row) {
+                var pctInp = row.querySelector('input[name="discount_pct[]"]');
+                var amtInp = row.querySelector('input[name="discount_amt[]"]');
+                if (pctInp) pctInp.value = '0.00';
+                if (amtInp) amtInp.value = '0.00';
+            });
+            return true;
+        }
+
+        if (headerDisc > totalAmt) {
+            headerDisc = totalAmt;
+            el.value = headerDisc.toFixed(2);
+        }
+
+        var allocated = 0;
+        var lastPos = -1;
+        for (var i = 0; i < rows.length; i++) {
+            var pctInp = rows[i].querySelector('input[name="discount_pct[]"]');
+            var amtInp = rows[i].querySelector('input[name="discount_amt[]"]');
+            if (amounts[i] <= 0) {
+                if (pctInp) pctInp.value = '0.00';
+                if (amtInp) amtInp.value = '0.00';
+                continue;
+            }
+            lastPos = i;
+            var share = sqRound2((amounts[i] / totalAmt) * headerDisc);
+            if (share > amounts[i]) share = amounts[i];
+            allocated = sqRound2(allocated + share);
+            if (pctInp) pctInp.value = '0.00';
+            if (amtInp) amtInp.value = share.toFixed(2);
+        }
+
+        // Absorb rounding remainder on the last positive-amount line
+        if (lastPos >= 0) {
+            var diff = sqRound2(headerDisc - allocated);
+            if (diff !== 0) {
+                var lastAmt = rows[lastPos].querySelector('input[name="discount_amt[]"]');
+                var fixed = sqRound2((parseFloat(lastAmt.value) || 0) + diff);
+                if (fixed < 0) fixed = 0;
+                if (fixed > amounts[lastPos]) fixed = amounts[lastPos];
+                lastAmt.value = fixed.toFixed(2);
+            }
+        }
+        return true;
+    }
+    function sqApplyHeaderDiscountAmt() {
+        var el = document.getElementById('applyDiscountAmt');
+        var pctEl = document.getElementById('applyDiscountPct');
+        if (!el || el.readOnly || el.disabled) return;
+        var raw = String(el.value || '').trim();
+        if (raw === '') return;
+        if (pctEl) pctEl.value = '';
+        if (!sqDistributeHeaderDiscountAmt()) return;
+        // Recalc VAT / net via existing discount_amt path
+        sqDetailRows().forEach(function (row) {
+            if (typeof recalcRow === 'function') recalcRow(row, 'discount_amt[]');
+        });
+        if (typeof updateSummary === 'function') updateSummary();
+    }
+    // Keep proportional allocation in sync when line qty/rate/amount changes
+    (function sqWrapUpdateSummaryForHdrDisc() {
+        function install() {
+            if (typeof window.updateSummary !== 'function' || window.updateSummary.__sqHdrDiscWrapped) return;
+            var orig = window.updateSummary;
+            window.updateSummary = function () {
+                if (!window.__sqHdrDiscRedistributing) {
+                    var amtEl = document.getElementById('applyDiscountAmt');
+                    if (amtEl && !amtEl.readOnly && !amtEl.disabled && String(amtEl.value || '').trim() !== '') {
+                        window.__sqHdrDiscRedistributing = true;
+                        try { sqDistributeHeaderDiscountAmt(); } finally { window.__sqHdrDiscRedistributing = false; }
+                    }
+                }
+                return orig.apply(this, arguments);
+            };
+            window.updateSummary.__sqHdrDiscWrapped = true;
+        }
+        document.addEventListener('DOMContentLoaded', install);
+        setTimeout(install, 0);
+    })();
+    function sqApplyHeaderVat() {
+        var el = document.getElementById('applyVatPct');
+        if (!el || el.readOnly || el.disabled) return;
+        var raw = String(el.value || '').trim();
+        if (raw === '') return;
+        var pct = Math.max(0, parseFloat(raw) || 0);
+        el.value = pct.toFixed(2);
+        document.querySelectorAll('#detailTableBody tr.detail-row input[name="vat[]"]').forEach(function (inp) {
+            if (inp.readOnly || inp.disabled) return;
+            inp.value = pct.toFixed(2);
+        });
+        if (typeof updateSummary === 'function') updateSummary();
     }
     function loadCustomerCrDays(acCode) {
         acCode = (acCode || '').trim();
@@ -1037,6 +1235,9 @@ $sq_self_url = '/' . ltrim(
     window.erpToolbar = window.erpToolbar || {};
 
     window.erpToolbar.onSave = function () {
+        // Disabled <select> values are not posted — re-enable salesman briefly before save
+        var smSel = document.getElementById('salesmanCodeSelect');
+        if (smSel) smSel.disabled = false;
         if (typeof getDetailLinesJson === 'function') {
             var jsonField = document.getElementById('detailLinesJson');
             if (jsonField) jsonField.value = getDetailLinesJson();
@@ -1081,18 +1282,26 @@ $sq_self_url = '/' . ltrim(
         document.querySelectorAll('#sqForm [disabled]').forEach(function (el) {
             if (el.name !== 'doc_no') el.removeAttribute('disabled');
         });
-        ['doc_no', 'salesman', 'customer_name', 'amount', 'discount', 'vat_pct', 'vat_amount', 'total_lc'].forEach(function (n) {
+        ['doc_no', 'customer_name', 'amount', 'discount', 'vat_pct', 'vat_amount', 'total_lc'].forEach(function (n) {
             var el = document.querySelector('#sqForm [name="' + n + '"]');
             if (el) el.setAttribute('readonly', '');
         });
+        var smSel = document.getElementById('salesmanCodeSelect');
+        if (smSel) smSel.disabled = false;
+        var applyDisc = document.getElementById('applyDiscountPct');
+        if (applyDisc) applyDisc.removeAttribute('readonly');
+        var applyDiscAmt = document.getElementById('applyDiscountAmt');
+        if (applyDiscAmt) applyDiscAmt.removeAttribute('readonly');
+        var applyVat = document.getElementById('applyVatPct');
+        if (applyVat) applyVat.removeAttribute('readonly');
         var acCodeEl = document.getElementById('acCodeInput');
         if (acCodeEl) {
             acCodeEl.setAttribute('onclick', 'openCustomerSearch()');
             acCodeEl.style.cursor = 'pointer';
         }
         // Unlock detail lines
-        ['qty[]', 'rate[]', 'discount_pct[]', 'discount_amt[]', 'item_desc[]', 'item_code[]'].forEach(function (n) {
-            document.querySelectorAll('#detailTableBody input[name="' + n + '"]').forEach(function (el) {
+        ['qty[]', 'rate[]', 'discount_pct[]', 'discount_amt[]', 'vat[]', 'item_desc[]', 'item_code[]'].forEach(function (n) {
+            document.querySelectorAll('#detailTableBody [name="' + n + '"]').forEach(function (el) {
                 el.removeAttribute('readonly');
                 if (n === 'item_code[]') {
                     el.setAttribute('onfocus', 'openItemSearch(this)');

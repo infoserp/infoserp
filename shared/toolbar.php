@@ -189,6 +189,21 @@ $tb_close_attr     = htmlspecialchars($close_url, ENT_QUOTES, 'UTF-8');
     </div>
 </div>
 
+<!-- ══════════════════ LEAVE — Unsaved changes warning ══════════════════ -->
+<div id="erpLeaveWarnModal" class="popup-overlay erp-search erp-leave-warn" style="display: none; z-index: 1200;">
+    <div class="erp-search-dialog sm erp-leave-dialog" role="alertdialog" aria-modal="true" aria-labelledby="erpLeaveTitle" aria-describedby="erpLeaveMsg">
+        <div class="erp-leave-icon" aria-hidden="true"><i class="fa fa-exclamation-circle"></i></div>
+        <div class="erp-leave-body">
+            <h4 id="erpLeaveTitle">INFOS</h4>
+            <p id="erpLeaveMsg">You have Un-updated Records..<br>Do you want to Continue.?</p>
+        </div>
+        <div class="erp-leave-actions">
+            <button type="button" class="erp-leave-btn primary" id="erpLeaveYesBtn">Yes</button>
+            <button type="button" class="erp-leave-btn" id="erpLeaveNoBtn">No</button>
+        </div>
+    </div>
+</div>
+
 <script>
 // ─────────────────────────────────────────────────────────────────────────────
 // PHP → JS: navigation constants (updated by the fragment after it loads)
@@ -348,6 +363,7 @@ function erpRenderDocSearch(docs) {
         var dn = String(doc.doc_no || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         var sub = [docName, erpFindDate(doc.doc_dt)].filter(Boolean).join(' \u00b7 ');
         var extra = [];
+        if (doc.customer) extra.push('Customer: ' + doc.customer);
         if (doc.tracking_no) extra.push(window.ERP_FIND_REF_LABEL + ': ' + doc.tracking_no);
         if (doc.job_no) extra.push('Job No: ' + doc.job_no);
         if (doc.narration) extra.push(doc.narration);
@@ -365,13 +381,15 @@ function erpRenderDocSearch(docs) {
 }
 
 function erpSelectDoc(doc_no) {
-    erpCloseDocSearch();
-    // Delegate to the active module so it can navigate to its own URL
-    if (typeof window.erpToolbar.onDocSelect === 'function') {
-        window.erpToolbar.onDocSelect(doc_no);
-    } else {
-        window.location.href = erpNavUrl('doc_no=' + encodeURIComponent(doc_no));
-    }
+    erpConfirmLeaveNav(function () {
+        erpCloseDocSearch();
+        // Delegate to the active module so it can navigate to its own URL
+        if (typeof window.erpToolbar.onDocSelect === 'function') {
+            window.erpToolbar.onDocSelect(doc_no);
+        } else {
+            window.location.href = erpNavUrl('doc_no=' + encodeURIComponent(doc_no));
+        }
+    });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -455,12 +473,194 @@ function erpVerifyEditPassword() {
 // ─────────────────────────────────────────────────────────────────────────────
 // ERP Toolbar dispatcher
 // ─────────────────────────────────────────────────────────────────────────────
-function erpToolbarGoHome(contentUrl) {
-    if (window.self !== window.top) {
-        window.location.href = contentUrl;
+// ── Dirty form guard + styled leave warning + toasts ─────────────────────────
+window.erpAllowLeaveOnce = false;
+window.erpFormDirty = false;
+var _erpFormSnapshot = null;
+var _erpLeaveProceed = null;
+
+function erpNormFieldValue(v) {
+    if (v == null) return '';
+    var s = String(v);
+    if (/^\s*-?\d+(\.\d+)?\s*$/.test(s)) {
+        var n = parseFloat(s);
+        if (!isNaN(n)) return String(n);
+    }
+    return s;
+}
+
+function erpSerializeFormState() {
+    var parts = [];
+    document.querySelectorAll('input[name], select[name], textarea[name]').forEach(function (el) {
+        if (!el.name) return;
+        // Computed on save — ignore so auto-summary does not mark dirty
+        if (el.name === 'detail_lines_json' || el.name === 'variableTermsJson') return;
+        if (el.type === 'button' || el.type === 'submit') return;
+        if (el.type === 'checkbox' || el.type === 'radio') {
+            parts.push(el.name + '=' + (el.checked ? erpNormFieldValue(el.value) : ''));
+        } else {
+            parts.push(el.name + '=' + erpNormFieldValue(el.value));
+        }
+    });
+    if (typeof getDetailLinesJson === 'function') {
+        try { parts.push('__lines=' + getDetailLinesJson()); } catch (e) {}
+    }
+    parts.sort();
+    return parts.join('\n');
+}
+
+window.erpCaptureFormSnapshot = function () {
+    _erpFormSnapshot = erpSerializeFormState();
+    window.erpFormDirty = false;
+};
+
+window.erpMarkFormDirty = function () {
+    window.erpFormDirty = true;
+};
+
+window.erpHasUnsavedEntry = function () {
+    if (window.erpAllowLeaveOnce) return false;
+    if (window.erpFormDirty) return true;
+    if (_erpFormSnapshot == null) return false;
+    try {
+        return erpSerializeFormState() !== _erpFormSnapshot;
+    } catch (e) {
+        return false;
+    }
+};
+
+function erpCloseLeaveWarning() {
+    var modal = document.getElementById('erpLeaveWarnModal');
+    if (modal) modal.style.display = 'none';
+    document.body.style.overflow = '';
+    _erpLeaveProceed = null;
+}
+
+function erpOpenLeaveWarning(proceed) {
+    _erpLeaveProceed = proceed;
+    var modal = document.getElementById('erpLeaveWarnModal');
+    if (!modal) {
+        // Fallback if markup missing
+        if (window.confirm('You have Un-updated Records..\nDo you want to Continue.?')) {
+            if (typeof proceed === 'function') proceed();
+        }
         return;
     }
-    window.location.href = <?php echo json_encode($shell_home_url); ?>;
+    modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    var yes = document.getElementById('erpLeaveYesBtn');
+    if (yes) yes.focus();
+}
+
+/**
+ * If the form is clean, runs proceed() immediately and returns true.
+ * If dirty, shows the styled warning; Yes runs proceed(), No stays. Returns false.
+ */
+window.erpConfirmLeaveNav = function (proceed) {
+    if (typeof window.erpHasUnsavedEntry !== 'function' || !window.erpHasUnsavedEntry()) {
+        if (typeof proceed === 'function') proceed();
+        return true;
+    }
+    if (typeof proceed !== 'function') return false;
+    erpOpenLeaveWarning(proceed);
+    return false;
+};
+
+document.addEventListener('click', function (e) {
+    if (!e.target || !e.target.closest) return;
+    if (e.target.closest('#tbSave')) {
+        window.erpAllowLeaveOnce = true;
+    }
+    if (e.target.closest('#erpLeaveYesBtn')) {
+        var go = _erpLeaveProceed;
+        erpCloseLeaveWarning();
+        if (typeof go === 'function') go();
+    }
+    if (e.target.closest('#erpLeaveNoBtn') || (e.target.id === 'erpLeaveWarnModal')) {
+        erpCloseLeaveWarning();
+    }
+});
+document.addEventListener('keydown', function (e) {
+    var modal = document.getElementById('erpLeaveWarnModal');
+    if (!modal || modal.style.display === 'none') return;
+    if (e.key === 'Escape') { e.preventDefault(); erpCloseLeaveWarning(); }
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        var go = _erpLeaveProceed;
+        erpCloseLeaveWarning();
+        if (typeof go === 'function') go();
+    }
+});
+document.addEventListener('submit', function () {
+    window.erpAllowLeaveOnce = true;
+});
+
+// Mark dirty only on real user edits (not toolbar / programmatic noise)
+document.addEventListener('input', function (e) {
+    var t = e.target;
+    if (!t || !t.name) return;
+    if (t.name === 'detail_lines_json' || t.name === 'variableTermsJson') return;
+    window.erpMarkFormDirty();
+}, true);
+document.addEventListener('change', function (e) {
+    var t = e.target;
+    if (!t || !t.name) return;
+    if (t.name === 'detail_lines_json' || t.name === 'variableTermsJson') return;
+    window.erpMarkFormDirty();
+}, true);
+
+// Snapshot after initial form/detail settle so auto-filled totals are not "dirty"
+document.addEventListener('DOMContentLoaded', function () {
+    setTimeout(function () { window.erpCaptureFormSnapshot(); }, 400);
+    setTimeout(function () { window.erpCaptureFormSnapshot(); }, 1000);
+    // Auto-hide any server-rendered toasts (success = 3s)
+    document.querySelectorAll('#erpToasts .erp-toast[data-autohide], .erp-toasts .erp-toast[data-autohide]').forEach(function (toast) {
+        var ms = parseInt(toast.getAttribute('data-autohide'), 10) || 3000;
+        setTimeout(function () { erpToastClose(toast); }, ms);
+    });
+});
+
+window.erpToastClose = function (toast) {
+    if (!toast || toast.classList.contains('hide')) return;
+    toast.classList.add('hide');
+    setTimeout(function () { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 250);
+};
+
+/** Styled toast flag. type: 'success' | 'error'. Default success hides after 3s. */
+window.erpShowToast = function (type, message, ms) {
+    type = type === 'error' ? 'error' : 'success';
+    if (ms == null) ms = type === 'success' ? 3000 : 6000;
+    var box = document.getElementById('erpToasts');
+    if (!box) {
+        box = document.createElement('div');
+        box.id = 'erpToasts';
+        box.className = 'erp-toasts';
+        box.setAttribute('aria-live', 'polite');
+        document.body.appendChild(box);
+    }
+    var bar = document.getElementById('erpToolbar');
+    if (bar) box.style.top = Math.max(12, Math.round(bar.getBoundingClientRect().bottom) + 8) + 'px';
+    var toast = document.createElement('div');
+    toast.className = 'erp-toast ' + type;
+    toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
+    toast.innerHTML = '<i class="fa ' + (type === 'error' ? 'fa-exclamation-triangle' : 'fa-check-circle')
+        + ' erp-toast-icon"></i><div class="erp-toast-msg"></div>'
+        + '<button type="button" class="erp-toast-close" title="Close" aria-label="Close">'
+        + '<i class="fa fa-times"></i></button>';
+    toast.querySelector('.erp-toast-msg').innerHTML = message;
+    toast.querySelector('.erp-toast-close').addEventListener('click', function () { erpToastClose(toast); });
+    box.appendChild(toast);
+    if (ms > 0) setTimeout(function () { erpToastClose(toast); }, ms);
+};
+
+function erpToolbarGoHome(contentUrl) {
+    erpConfirmLeaveNav(function () {
+        if (window.self !== window.top) {
+            window.location.href = contentUrl;
+            return;
+        }
+        window.location.href = <?php echo json_encode($shell_home_url); ?>;
+    });
 }
 
 window.erpToolbar = window.erpToolbar || {};
@@ -590,10 +790,18 @@ document.addEventListener('keydown', function (e) {
 
 function erpToolbarAction(action) {
     erpToolbarSetMore(false);
-    var fn = 'on' + action.charAt(0).toUpperCase() + action.slice(1);
-    if (typeof window.erpToolbar[fn] === 'function') {
-        window.erpToolbar[fn]();
+    var leaveActions = { new: 1, prior: 1, next: 1, cancel: 1, list: 1 };
+    var run = function () {
+        var fn = 'on' + action.charAt(0).toUpperCase() + action.slice(1);
+        if (typeof window.erpToolbar[fn] === 'function') {
+            window.erpToolbar[fn]();
+        }
+    };
+    if (leaveActions[action]) {
+        erpConfirmLeaveNav(run);
+        return;
     }
+    run();
 }
 
 /**

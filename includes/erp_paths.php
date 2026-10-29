@@ -162,6 +162,11 @@ if (!function_exists('erp_guard_standalone_get')) {
 }
 
 if (!function_exists('erp_guard_shell_not_in_iframe')) {
+    /**
+     * /home must never render inside the content iframe (duplicate topnav/sidebar).
+     * Sec-Fetch-Dest is missing in some browsers — approvalmenu.php also has a
+     * client-side fallback that replaces nested shells with the dashboard embed URL.
+     */
     function erp_guard_shell_not_in_iframe() {
         if (erp_request_in_iframe() || erp_is_embedded()) {
             erp_redirect_url(erp_iframe_url('dashboard'));

@@ -1328,6 +1328,23 @@ $si_self_url = '/' . ltrim(
             <section class="doc-panel">
                 <h3 class="doc-section-title">Summary</h3>
                 <div class="doc-sum-row">
+                    <label class="doc-lbl">Apply Disc</label>
+                    <div class="doc-sum-pair">
+                        <input type="number" name="apply_discount_pct" id="applyDiscountPct" class="doc-inp doc-inp-pct" value="" step="0.01" min="0" max="100"
+                               placeholder="%" <?php echo $is_view_mode ? 'readonly' : ''; ?>
+                               onchange="siApplyHeaderDiscountPct()" onblur="siApplyHeaderDiscountPct()">
+                        <input type="number" name="apply_discount_amt" id="applyDiscountAmt" class="doc-inp doc-inp-num" value="" step="0.01" min="0"
+                               placeholder="Amt" <?php echo $is_view_mode ? 'readonly' : ''; ?>
+                               onchange="siApplyHeaderDiscountAmt()" onblur="siApplyHeaderDiscountAmt()">
+                    </div>
+                </div>
+                <div class="doc-sum-row">
+                    <label class="doc-lbl">Apply VAT %</label>
+                    <input type="number" name="apply_vat_pct" id="applyVatPct" class="doc-inp doc-inp-num" value="" step="0.01" min="0"
+                           placeholder="All lines" <?php echo $is_view_mode ? 'readonly' : ''; ?>
+                           onchange="siApplyHeaderVat()" onblur="siApplyHeaderVat()">
+                </div>
+                <div class="doc-sum-row">
                     <label class="doc-lbl">Amount</label>
                     <input type="text" name="amount" class="doc-inp doc-inp-num" value="<?php echo htmlspecialchars($amount); ?>" readonly>
                 </div>
@@ -1591,6 +1608,149 @@ $si_self_url = '/' . ltrim(
         if (cardName) cardName.textContent = description;
         closeCustomerSearch();
         loadCustomerCredit(ac_code);
+    }
+
+    function siRound2(n) {
+        return Math.round((Number(n) + Number.EPSILON) * 100) / 100;
+    }
+    function siDetailRows() {
+        return Array.prototype.slice.call(
+            document.querySelectorAll('#detailTableBody tr.detail-row, .si02-lines .detail-row, #detailTableBody.si02-lines .detail-row')
+        );
+    }
+    function siLineGross(row) {
+        var qty = parseFloat((row.querySelector('[name="qty[]"]') || {}).value) || 0;
+        var rate = parseFloat((row.querySelector('[name="rate[]"]') || {}).value) || 0;
+        return siRound2(qty * rate);
+    }
+    // Apply same % to every line (clears header discount amount)
+    function siApplyHeaderDiscountPct() {
+        var el = document.getElementById('applyDiscountPct');
+        var amtEl = document.getElementById('applyDiscountAmt');
+        if (!el || el.readOnly || el.disabled) return;
+        var raw = String(el.value || '').trim();
+        if (raw === '') return;
+        if (amtEl) amtEl.value = '';
+        var pct = Math.min(100, Math.max(0, parseFloat(raw) || 0));
+        el.value = pct.toFixed(2);
+        siDetailRows().forEach(function (row) {
+            var pctInp = row.querySelector('[name="discount_pct[]"]');
+            var amtInp = row.querySelector('[name="discount_amt[]"]');
+            if (!pctInp || pctInp.readOnly || pctInp.disabled) return;
+            pctInp.value = pct.toFixed(2);
+            if (amtInp && !amtInp.readOnly) amtInp.value = '0.00';
+        });
+        if (typeof updateSummary === 'function') updateSummary();
+    }
+    // Distribute header discount amount proportionally by line Amount
+    // Line Discount = (Line Amount / Total Detail Amount) × Header Discount Amount
+    function siDistributeHeaderDiscountAmt() {
+        var el = document.getElementById('applyDiscountAmt');
+        if (!el) return false;
+        var raw = String(el.value || '').trim();
+        if (raw === '') return false;
+
+        var headerDisc = Math.max(0, parseFloat(raw) || 0);
+        el.value = headerDisc.toFixed(2);
+
+        var rows = siDetailRows().filter(function (row) {
+            var amtInp = row.querySelector('[name="discount_amt[]"]');
+            return amtInp && !amtInp.readOnly && !amtInp.disabled;
+        });
+        if (!rows.length) return true;
+
+        var amounts = rows.map(siLineGross);
+        var totalAmt = amounts.reduce(function (s, n) { return s + n; }, 0);
+
+        if (totalAmt <= 0 || headerDisc <= 0) {
+            rows.forEach(function (row) {
+                var pctInp = row.querySelector('[name="discount_pct[]"]');
+                var amtInp = row.querySelector('[name="discount_amt[]"]');
+                if (pctInp) pctInp.value = '0.00';
+                if (amtInp) amtInp.value = '0.00';
+            });
+            return true;
+        }
+
+        if (headerDisc > totalAmt) {
+            headerDisc = totalAmt;
+            el.value = headerDisc.toFixed(2);
+        }
+
+        var allocated = 0;
+        var lastPos = -1;
+        for (var i = 0; i < rows.length; i++) {
+            var pctInp = rows[i].querySelector('[name="discount_pct[]"]');
+            var amtInp = rows[i].querySelector('[name="discount_amt[]"]');
+            if (amounts[i] <= 0) {
+                if (pctInp) pctInp.value = '0.00';
+                if (amtInp) amtInp.value = '0.00';
+                continue;
+            }
+            lastPos = i;
+            var share = siRound2((amounts[i] / totalAmt) * headerDisc);
+            if (share > amounts[i]) share = amounts[i];
+            allocated = siRound2(allocated + share);
+            if (pctInp) pctInp.value = '0.00';
+            if (amtInp) amtInp.value = share.toFixed(2);
+        }
+
+        if (lastPos >= 0) {
+            var diff = siRound2(headerDisc - allocated);
+            if (diff !== 0) {
+                var lastAmt = rows[lastPos].querySelector('[name="discount_amt[]"]');
+                var fixed = siRound2((parseFloat(lastAmt.value) || 0) + diff);
+                if (fixed < 0) fixed = 0;
+                if (fixed > amounts[lastPos]) fixed = amounts[lastPos];
+                lastAmt.value = fixed.toFixed(2);
+            }
+        }
+        return true;
+    }
+    function siApplyHeaderDiscountAmt() {
+        var el = document.getElementById('applyDiscountAmt');
+        var pctEl = document.getElementById('applyDiscountPct');
+        if (!el || el.readOnly || el.disabled) return;
+        var raw = String(el.value || '').trim();
+        if (raw === '') return;
+        if (pctEl) pctEl.value = '';
+        if (!siDistributeHeaderDiscountAmt()) return;
+        siDetailRows().forEach(function (row) {
+            if (typeof recalcRow === 'function') recalcRow(row, 'discount_amt[]');
+        });
+        if (typeof updateSummary === 'function') updateSummary();
+    }
+    (function siWrapUpdateSummaryForHdrDisc() {
+        function install() {
+            if (typeof window.updateSummary !== 'function' || window.updateSummary.__siHdrDiscWrapped) return;
+            var orig = window.updateSummary;
+            window.updateSummary = function () {
+                if (!window.__siHdrDiscRedistributing) {
+                    var amtEl = document.getElementById('applyDiscountAmt');
+                    if (amtEl && !amtEl.readOnly && !amtEl.disabled && String(amtEl.value || '').trim() !== '') {
+                        window.__siHdrDiscRedistributing = true;
+                        try { siDistributeHeaderDiscountAmt(); } finally { window.__siHdrDiscRedistributing = false; }
+                    }
+                }
+                return orig.apply(this, arguments);
+            };
+            window.updateSummary.__siHdrDiscWrapped = true;
+        }
+        document.addEventListener('DOMContentLoaded', install);
+        setTimeout(install, 0);
+    })();
+    function siApplyHeaderVat() {
+        var el = document.getElementById('applyVatPct');
+        if (!el || el.readOnly || el.disabled) return;
+        var raw = String(el.value || '').trim();
+        if (raw === '') return;
+        var pct = Math.max(0, parseFloat(raw) || 0);
+        el.value = pct.toFixed(2);
+        document.querySelectorAll('#detailTableBody [name="vat[]"], .si02-lines [name="vat[]"]').forEach(function (inp) {
+            if (inp.readOnly || inp.disabled) return;
+            inp.value = (inp.type === 'hidden') ? String(pct) : pct.toFixed(2);
+        });
+        if (typeof updateSummary === 'function') updateSummary();
     }
 
     // ---- More details panel ----

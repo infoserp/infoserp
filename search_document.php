@@ -15,12 +15,14 @@ $company_code = isset($_SESSION['company_code']) ? $_SESSION['company_code'] : '
 $branch_code = isset($_SESSION['branch_code']) ? $_SESSION['branch_code'] : '';
 
 // Tables searched per doc_code (whitelist — table/column names are never taken from the request).
-//   ref_col : header column returned as tracking_no and searched by the "tracking_no" option
-//   job_col : header job column (searched together with the detail lines' job_no), or null
+//   ref_col     : header column returned as tracking_no and searched by the "tracking_no" option
+//   job_col     : header job column (searched together with the detail lines' job_no), or null
+//   with_customer: join ac_master and return/search customer name (Sales Quotation)
 $search_sources = [
     'MR' => ['h' => 'material_request_h', 'd' => 'material_request_d', 'ref_col' => 'tracking_no', 'job_col' => null],
     'SI' => ['h' => 'invoice_h',          'd' => 'invoice_d',          'ref_col' => 'tracking_no', 'job_col' => 'job_no'],
-    'SQ' => ['h' => 'sales_quotation_h',  'd' => 'sales_quotation_d',  'ref_col' => 'tracking_no', 'job_col' => 'job_no'],
+    // sales_quotation_h has no job_no — only detail lines do; join customer for Find results
+    'SQ' => ['h' => 'sales_quotation_h',  'd' => 'sales_quotation_d',  'ref_col' => 'tracking_no', 'job_col' => null, 'with_customer' => true],
     'JC' => ['h' => 'job_card_h',         'd' => 'job_card_d',         'ref_col' => 'tracking_no', 'job_col' => 'project_no'],
     'RV' => ['h' => 'chq_receipt_h',      'd' => 'chq_receipt_d',      'ref_col' => 'chq_no',      'job_col' => null],
     'TO' => ['h' => 'stock_transfer_out_h', 'd' => 'stock_transfer_out_d', 'ref_col' => 'requisition_no', 'job_col' => null],
@@ -34,6 +36,7 @@ $tbl_h = $src['h'];
 $tbl_d = $src['d'];
 $ref_col = $src['ref_col'];
 $job_col = $src['job_col'];
+$with_customer = !empty($src['with_customer']);
 
 // Helper function to force UTF-8
 function force_utf8($str)
@@ -54,10 +57,20 @@ $job_select = $job_col !== null
     ? "COALESCE(NULLIF(LTRIM(RTRIM(h.$job_col)), ''), $detail_jobs)"
     : $detail_jobs;
 
+$customer_select = $with_customer
+    ? ", ISNULL(am.description, '') AS customer_name"
+    : ", CAST('' AS NVARCHAR(150)) AS customer_name";
+
 $sql = "SELECT TOP 500 h.doc_no, h.doc_dt, h.$ref_col AS tracking_no, h.narration, 
                $job_select AS job_no
-        FROM $tbl_h h 
-        WHERE h.company_code = ? 
+               $customer_select
+        FROM $tbl_h h ";
+if ($with_customer) {
+    $sql .= "LEFT JOIN ac_master am
+                ON am.company_code = h.company_code
+               AND am.ac_code = h.ac_code ";
+}
+$sql .= "WHERE h.company_code = ? 
           AND h.branch_code = ?";
 
 $params = array($company_code, $branch_code);
@@ -78,11 +91,26 @@ if ($doc_type_filter !== '') {
 }
 
 if ($type === 'doc_no') {
-    $sql .= " AND h.doc_no LIKE ?";
-    $params[] = "%{$searchTerm}%";
+    if ($with_customer && $searchTerm !== '') {
+        $sql .= " AND (h.doc_no LIKE ? OR am.description LIKE ? OR h.ac_code LIKE ?)";
+        $params[] = "%{$searchTerm}%";
+        $params[] = "%{$searchTerm}%";
+        $params[] = "%{$searchTerm}%";
+    } else {
+        $sql .= " AND h.doc_no LIKE ?";
+        $params[] = "%{$searchTerm}%";
+    }
 } else if ($type === 'tracking_no') {
-    $sql .= " AND h.$ref_col LIKE ?";
-    $params[] = "%{$searchTerm}%";
+    if ($with_customer) {
+        // Find label "Customer" — match customer name / code; also keep tracking_no
+        $sql .= " AND (am.description LIKE ? OR h.ac_code LIKE ? OR h.$ref_col LIKE ?)";
+        $params[] = "%{$searchTerm}%";
+        $params[] = "%{$searchTerm}%";
+        $params[] = "%{$searchTerm}%";
+    } else {
+        $sql .= " AND h.$ref_col LIKE ?";
+        $params[] = "%{$searchTerm}%";
+    }
 } else if ($type === 'job_no') {
     $job_detail_match = "EXISTS (SELECT 1 FROM $tbl_d d WHERE d.doc_no = h.doc_no AND d.company_code = h.company_code AND d.branch_code = h.branch_code AND d.job_no LIKE ?)";
     if ($job_col !== null) {
@@ -96,30 +124,38 @@ if ($type === 'doc_no') {
 
 $sql .= " ORDER BY h.doc_no DESC";
 
-$stmt = $con->prepare($sql);
-$stmt->execute($params);
+try {
+    $stmt = $con->prepare($sql);
+    $stmt->execute($params);
 
-$docs = [];
-while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-    $dt = isset($row['doc_dt']) ? force_utf8($row['doc_dt']) : '';
-    if ($dt && strpos($dt, ' ') !== false) {
-        $dt = explode(' ', $dt)[0];
+    $docs = [];
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $dt = isset($row['doc_dt']) ? force_utf8($row['doc_dt']) : '';
+        if ($dt && strpos($dt, ' ') !== false) {
+            $dt = explode(' ', $dt)[0];
+        }
+        $docs[] = [
+            'doc_no' => force_utf8($row['doc_no']),
+            'doc_dt' => $dt,
+            'tracking_no' => isset($row['tracking_no']) ? force_utf8($row['tracking_no']) : '',
+            'job_no' => isset($row['job_no']) ? force_utf8($row['job_no']) : '',
+            'narration' => isset($row['narration']) ? force_utf8($row['narration']) : '',
+            'customer' => isset($row['customer_name']) ? force_utf8(trim((string) $row['customer_name'])) : '',
+        ];
     }
-    $docs[] = [
-        'doc_no' => force_utf8($row['doc_no']),
-        'doc_dt' => $dt,
-        'tracking_no' => isset($row['tracking_no']) ? force_utf8($row['tracking_no']) : '',
-        'job_no' => isset($row['job_no']) ? force_utf8($row['job_no']) : '',
-        'narration' => isset($row['narration']) ? force_utf8($row['narration']) : ''
-    ];
-}
 
-header('Content-Type: application/json; charset=utf-8');
-$json = json_encode($docs);
+    header('Content-Type: application/json; charset=utf-8');
+    $json = json_encode($docs);
 
-if ($json === false) {
-    echo json_encode(["error" => "JSON Encoding Failed: " . json_last_error_msg()]);
-} else {
-    echo $json;
+    if ($json === false) {
+        echo json_encode(["error" => "JSON Encoding Failed: " . json_last_error_msg()]);
+    } else {
+        echo $json;
+    }
+} catch (Exception $e) {
+    error_log('search_document error [' . $doc_code . ']: ' . $e->getMessage());
+    header('Content-Type: application/json; charset=utf-8');
+    http_response_code(500);
+    echo json_encode(['error' => 'Search failed']);
 }
 ?>

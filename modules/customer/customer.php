@@ -76,7 +76,7 @@ $FIELDS = [
     ['col' => 'address',               'label' => 'Address',        'max' => 250,  'type' => 'text',     'section' => 'address', 'span' => 2],
     ['col' => 'city',                  'label' => 'City',           'max' => 50,   'type' => 'text',     'section' => 'address'],
     ['col' => 'country',               'label' => 'Country',        'max' => 50,   'type' => 'text',     'section' => 'address'],
-    ['col' => 'service_location_code', 'label' => 'Service Loc',    'max' => 5,    'type' => 'select',   'section' => 'address'],
+    ['col' => 'service_location_code', 'label' => 'Service Loc',    'max' => 5,    'type' => 'select',   'section' => 'address', 'options' => 'service_location'],
     ['col' => 'email',                 'label' => 'E-Mail',         'max' => 50,   'type' => 'text',     'section' => 'address'],
     ['col' => 'www',                   'label' => 'Website',        'max' => 50,   'type' => 'text',     'section' => 'address'],
 
@@ -87,7 +87,8 @@ $FIELDS = [
     ['col' => 'contact_designation',   'label' => 'Designation',    'max' => 50,   'type' => 'text',     'section' => 'contact'],
     ['col' => 'contact_no',            'label' => 'Mobile No',      'max' => 50,   'type' => 'text',     'section' => 'contact', 'required' => true],
     ['col' => 'contact_email',         'label' => 'E-Mail',         'max' => 50,   'type' => 'text',     'section' => 'contact'],
-
+    ['col' => 'salesman_code',         'label' => 'Salesman',       'max' => 20,   'type' => 'select',   'section' => 'contact', 'options' => 'salesman'],
+    
     ['col' => 'tax_no',                'label' => 'TRN',            'max' => 50,   'type' => 'text',     'section' => 'identity', 'class' => 'cf-trn'],
 
     ['col' => 'active',                'label' => 'Active',         'max' => 1,    'type' => 'checkbox', 'section' => 'other'],
@@ -403,7 +404,23 @@ function fetch_service_locations($pdo)
     }
 }
 
+function fetch_salesmen($pdo, $company_code)
+{
+    try {
+        $stmt = $pdo->prepare("SELECT salesman_code, salesman_name
+                               FROM salesman
+                               WHERE company_code = ?
+                               ORDER BY salesman_name");
+        $stmt->execute([$company_code]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        error_log('Salesman lookup error: ' . $e->getMessage());
+        return [];
+    }
+}
+
 $service_locations = fetch_service_locations($pdo);
+$salesmen          = fetch_salesmen($pdo, $company_code);
 
 // ---------------------------------------------------------------------------
 //  Create
@@ -532,7 +549,7 @@ function keep_val($posted, $col, $keep)
 }
 
 /** Render one field for either the create form or the detail window. */
-function render_field($f, $value, $service_locations, $mode)
+function render_field($f, $value, $service_locations, $mode, $salesmen = [])
 {
     $id       = ($mode === 'detail' ? 'd_' : '') . $f['col'];
     $name     = $f['col'];
@@ -575,11 +592,22 @@ function render_field($f, $value, $service_locations, $mode)
         echo '<select id="' . htmlspecialchars($id) . '" name="' . htmlspecialchars($name) . '"'
            . $reqAttr . $hook . ' class="' . $cls . '">';
         echo '<option value="">-- None --</option>';
-        foreach ($service_locations as $loc) {
-            $code = $loc['service_location_code'];
-            $sel  = ((string) $value === (string) $code) ? ' selected' : '';
-            echo '<option value="' . htmlspecialchars($code) . '"' . $sel . '>'
-               . htmlspecialchars($loc['service_location_name']) . ' (' . htmlspecialchars($code) . ')</option>';
+        $optSource = $f['options'] ?? 'service_location';
+        if ($optSource === 'salesman') {
+            foreach ($salesmen as $sm) {
+                $code = trim((string) $sm['salesman_code']);
+                $sel  = ((string) $value === (string) $code) ? ' selected' : '';
+                echo '<option value="' . htmlspecialchars($code) . '"' . $sel . '>'
+                   . htmlspecialchars(trim((string) $sm['salesman_name']))
+                   . ' (' . htmlspecialchars($code) . ')</option>';
+            }
+        } else {
+            foreach ($service_locations as $loc) {
+                $code = $loc['service_location_code'];
+                $sel  = ((string) $value === (string) $code) ? ' selected' : '';
+                echo '<option value="' . htmlspecialchars($code) . '"' . $sel . '>'
+                   . htmlspecialchars($loc['service_location_name']) . ' (' . htmlspecialchars($code) . ')</option>';
+            }
         }
         echo '</select>';
     } elseif ($f['type'] === 'textarea') {
@@ -647,7 +675,7 @@ $self_js = json_encode($self_url, JSON_UNESCAPED_SLASHES);
                 </div>
                 <?php foreach ($FIELDS as $f): ?>
                     <?php if ($f['section'] !== 'identity') { continue; } ?>
-                    <?php render_field($f, keep_val($posted, $f['col'], $keep), $service_locations, 'create'); ?>
+                    <?php render_field($f, keep_val($posted, $f['col'], $keep), $service_locations, 'create', $salesmen); ?>
                 <?php endforeach; ?>
             </div>
 
@@ -657,7 +685,7 @@ $self_js = json_encode($self_url, JSON_UNESCAPED_SLASHES);
                     <div class="cf-grid">
                         <?php foreach ($FIELDS as $f): ?>
                             <?php if ($f['section'] !== $key) { continue; } ?>
-                            <?php render_field($f, keep_val($posted, $f['col'], $keep), $service_locations, 'create'); ?>
+                            <?php render_field($f, keep_val($posted, $f['col'], $keep), $service_locations, 'create', $salesmen); ?>
                         <?php endforeach; ?>
                     </div>
                 </div>
@@ -732,7 +760,7 @@ $self_js = json_encode($self_url, JSON_UNESCAPED_SLASHES);
                     </div>
                     <?php foreach ($FIELDS as $f): ?>
                         <?php if ($f['section'] !== 'identity') { continue; } ?>
-                        <?php render_field($f, '', $service_locations, 'detail'); ?>
+                        <?php render_field($f, '', $service_locations, 'detail', $salesmen); ?>
                     <?php endforeach; ?>
                 </div>
 
@@ -742,7 +770,7 @@ $self_js = json_encode($self_url, JSON_UNESCAPED_SLASHES);
                         <div class="cf-grid">
                             <?php foreach ($FIELDS as $f): ?>
                                 <?php if ($f['section'] !== $key) { continue; } ?>
-                                <?php render_field($f, '', $service_locations, 'detail'); ?>
+                                <?php render_field($f, '', $service_locations, 'detail', $salesmen); ?>
                             <?php endforeach; ?>
                         </div>
                     </div>

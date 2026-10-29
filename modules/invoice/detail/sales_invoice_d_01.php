@@ -504,7 +504,8 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
         setInputValue(row, 'total[]', total, 2);
 
         // VAT amount = TOTAL × tax1_percent / 100
-        const vatPct    = getNumericInput(row, 'vat[]') || VAT_PCT;
+        const vatEl     = row.querySelector('input[name="vat[]"]');
+        const vatPct    = vatEl ? (parseFloat(vatEl.value) || 0) : VAT_PCT;
         const vatAmount = roundMoney((total * vatPct) / 100);
         setInputValue(row, 'vat_amount[]', vatAmount, 2);
 

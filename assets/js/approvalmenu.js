@@ -80,6 +80,16 @@
         }
     }
 
+    /** If the shell page is nested in an iframe, swap it for the dashboard embed URL. */
+    function initShellIframeGuard() {
+        if (window.self === window.top) return;
+        if (!document.getElementById('erp-main-frame')) return;
+        var meta = document.querySelector('meta[name="erp-iframe-fallback"]');
+        var url = meta && meta.content ? meta.content : '';
+        if (!url) return;
+        window.location.replace(url);
+    }
+
     function setActiveNav(key) {
         if (!key) return;
         document.querySelectorAll('#erp-sidebar .erp-nav-link').forEach(function (link) {
@@ -303,6 +313,20 @@
         });
     }
 
+    /** Ask the entry iframe whether it is safe to leave; calls onAllow when OK. */
+    function requestLeaveContentFrame(frame, onAllow) {
+        try {
+            var win = frame && frame.contentWindow;
+            if (win && typeof win.erpConfirmLeaveNav === 'function') {
+                win.erpConfirmLeaveNav(onAllow);
+                return;
+            }
+        } catch (err) {
+            // Cross-origin or unloaded frame — allow navigation
+        }
+        if (typeof onAllow === 'function') onAllow();
+    }
+
     function initIframeNavigation() {
         var frame = document.getElementById('erp-main-frame');
         if (!frame) return;
@@ -313,9 +337,11 @@
                 var href = link.getAttribute('href');
                 if (!href || href.indexOf('javascript:') === 0) return;
                 event.preventDefault();
-                frame.src = withEmbed(href);
-                setActiveNav(link.getAttribute('data-nav-key') || '');
-                closeSidebarOnMobile();
+                requestLeaveContentFrame(frame, function () {
+                    frame.src = withEmbed(href);
+                    setActiveNav(link.getAttribute('data-nav-key') || '');
+                    closeSidebarOnMobile();
+                });
             });
         });
     }
@@ -329,6 +355,7 @@
     }
 
     document.addEventListener('DOMContentLoaded', function () {
+        initShellIframeGuard();
         initShellUrlLock();
         initSidebar();
         initMenuGroups();

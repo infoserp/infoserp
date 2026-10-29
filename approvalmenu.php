@@ -31,12 +31,23 @@ $erp_has_topnav = !empty($menu_tree);
     <title>Dashboard — INFOS ERP</title>
     <meta name="erp-base" content="<?php echo htmlspecialchars(erp_base_path(), ENT_QUOTES, 'UTF-8'); ?>">
     <meta name="erp-shell-url" content="<?php echo htmlspecialchars(erp_shell_url(), ENT_QUOTES, 'UTF-8'); ?>">
+    <meta name="erp-iframe-fallback" content="<?php echo htmlspecialchars($iframe_default, ENT_QUOTES, 'UTF-8'); ?>">
 <?php include __DIR__ . '/includes/erp_styles.php'; ?>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="<?php echo htmlspecialchars(erp_asset_v('assets/css/approvalmenu.css'), ENT_QUOTES, 'UTF-8'); ?>" rel="stylesheet" type="text/css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>body { font-family: 'Inter', system-ui, sans-serif; }</style>
+    <?php /* Nested /home inside the content iframe duplicates the top menu — break out immediately. */ ?>
+    <script>
+    (function () {
+        if (window.self === window.top) return;
+        var meta = document.querySelector('meta[name="erp-iframe-fallback"]');
+        var url = meta && meta.content ? meta.content : '';
+        if (!url) return;
+        window.location.replace(url);
+    })();
+    </script>
 </head>
 <body class="erp-body erp-scroll erp-shell text-slate-800<?php echo $erp_has_topnav ? ' erp-has-topnav' : ''; ?>">
 

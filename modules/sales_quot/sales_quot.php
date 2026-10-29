@@ -118,6 +118,7 @@ $is_view_mode    = ($doc_no !== '');
 $close_url       = erp_iframe_url('dashboard');
 $save_label      = 'Save Quotation';
 $search_doc_url  = erp_iframe_url('search_document?doc_code=' . urlencode($doc_code));
+$search_ref_label = 'Customer';
 $selected_doc_type = $doc_type;
 
 $user_allow_edit = 'Y';
@@ -193,8 +194,8 @@ if ($doc_no !== '') {
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link href="//maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" rel="stylesheet">
     <link href="<?php echo htmlspecialchars(erp_font_awesome_href(), ENT_QUOTES, 'UTF-8'); ?>" rel="stylesheet" type="text/css">
-    <link rel="stylesheet" href="../../material_request.css?v=5">
-    <link rel="stylesheet" href="../../assets/css/erp_document.css?v=28">
+    <link rel="stylesheet" href="<?php echo htmlspecialchars(erp_asset_v('material_request.css'), ENT_QUOTES, 'UTF-8'); ?>">
+    <link rel="stylesheet" href="<?php echo htmlspecialchars(erp_asset_v('assets/css/erp_document.css'), ENT_QUOTES, 'UTF-8'); ?>">
 </head>
 <body>
 

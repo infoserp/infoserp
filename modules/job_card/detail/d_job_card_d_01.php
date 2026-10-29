@@ -76,7 +76,7 @@ if (!function_exists('jc_blank_line')) {
             <td data-label="Code"><input type="text" class="form-control form-control-sm detail-input si-code" name="item_code[]" placeholder="Select item" readonly style="cursor:pointer;" onfocus="openItemSearch(this)" onclick="openItemSearch(this)"></td>
             <td class="si-desc-cell" data-label="Description">
                 <div class="detail-cell">
-                    <input type="text" class="form-control form-control-sm detail-input si-desc" name="item_desc[]" placeholder="Description">
+                    <textarea class="form-control form-control-sm detail-input si-desc" name="item_desc[]" rows="1" placeholder="Description"></textarea>
                     <button type="button" class="detail-more" tabindex="-1" onclick="jcOpenDescMore(this)">More..</button>
                 </div>
             </td>
@@ -251,7 +251,7 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
              style="cursor:<?php echo $_detail_view ? 'default' : 'pointer'; ?>;"></td>
     <td class="si-desc-cell" data-label="Description">
         <div class="detail-cell">
-            <input type="text" class="form-control form-control-sm detail-input si-desc" name="item_desc[]" value="<?php echo htmlspecialchars($_dl['item_description'] ?? ''); ?>" <?php echo $_dl_desc_ro; ?>>
+            <textarea class="form-control form-control-sm detail-input si-desc" name="item_desc[]" rows="1" <?php echo $_dl_desc_ro; ?>><?php echo htmlspecialchars($_dl['item_description'] ?? ''); ?></textarea>
             <button type="button" class="detail-more" tabindex="-1" onclick="jcOpenDescMore(this)">More..</button>
         </div>
     </td>
@@ -600,7 +600,7 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
 
     function jcOpenDescMore(btn) {
         var row = btn.closest('tr');
-        _jcDescInput = row.querySelector('input[name="item_desc[]"]');
+        _jcDescInput = row.querySelector('textarea[name="item_desc[]"], input[name="item_desc[]"]');
         var ta = document.getElementById('jcDescText');
         ta.value = _jcDescInput ? _jcDescInput.value : '';
         ta.readOnly = JC_VIEW_MODE && _jcDescInput && _jcDescInput.readOnly;
@@ -610,6 +610,7 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
     }
     function jcSaveDescMore() {
         if (_jcDescInput && !_jcDescInput.readOnly) {
+            // Keep exact line breaks from the More.. editor (same as Sales Quotation)
             _jcDescInput.value = document.getElementById('jcDescText').value;
         }
         jcCloseDescMore();
@@ -738,7 +739,7 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
         if (!currentLineInput) return;
         var row = currentLineInput.closest('tr');
         var codeInput = row.querySelector('input[name="item_code[]"]');
-        var descInput = row.querySelector('input[name="item_desc[]"]');
+        var descInput = row.querySelector('textarea[name="item_desc[]"], input[name="item_desc[]"]');
         var unitSel   = row.querySelector('select[name="unit[]"]');
         var rateInput = row.querySelector('input[name="rate[]"]');
         if (codeInput) codeInput.value = code;
@@ -766,7 +767,7 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
             + '<td data-label="Line"><input type="text" class="form-control form-control-sm detail-input text-center" name="line_no[]" value="' + jcEsc(String(lineNo)) + '" readonly></td>'
             + '<td data-label="Code"><input type="text" class="form-control form-control-sm detail-input si-code" name="item_code[]" value="' + jcEsc(data.item_code || '') + '" readonly style="cursor:pointer;" onfocus="openItemSearch(this)" onclick="openItemSearch(this)"></td>'
             + '<td class="si-desc-cell" data-label="Description"><div class="detail-cell">'
-            + '<input type="text" class="form-control form-control-sm detail-input si-desc" name="item_desc[]" value="' + jcEsc(data.item_desc || '') + '">'
+            + '<textarea class="form-control form-control-sm detail-input si-desc" name="item_desc[]" rows="1">' + jcEsc(data.item_desc || '') + '</textarea>'
             + '<button type="button" class="detail-more" tabindex="-1" onclick="jcOpenDescMore(this)">More..</button></div></td>'
             + '<td data-label="Qty"><input type="number" class="form-control form-control-sm detail-input" name="qty[]" value="' + qty + '" style="text-align:right;"></td>'
             + '<td data-label="Unit"><select class="form-control form-control-sm detail-input text-center" name="unit[]">' + jcUnitOptions(unit) + '</select></td>'
@@ -802,7 +803,8 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
         // Drop blank starter rows with no content
         Array.prototype.slice.call(tbody.querySelectorAll('tr.detail-row')).forEach(function (tr) {
             var code = (tr.querySelector('input[name="item_code[]"]') || {}).value || '';
-            var desc = (tr.querySelector('input[name="item_desc[]"]') || {}).value || '';
+            var descEl = tr.querySelector('textarea[name="item_desc[]"], input[name="item_desc[]"]');
+            var desc = descEl ? descEl.value : '';
             var qty = parseFloat((tr.querySelector('input[name="qty[]"]') || {}).value) || 0;
             if (!String(code).trim() && !String(desc).trim() && qty === 0) tr.remove();
         });
@@ -822,9 +824,11 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
                 var rateEl = existing.querySelector('input[name="rate[]"]');
                 var unitEl = existing.querySelector('select[name="unit[]"]');
                 var remEl = existing.querySelector('input[name="item_remark[]"]');
+                var descElUp = existing.querySelector('textarea[name="item_desc[]"], input[name="item_desc[]"]');
                 if (qtyEl) qtyEl.value = p.qty;
                 if (rateEl) rateEl.value = Number(p.rate || 0).toFixed(2);
                 if (unitEl) unitEl.innerHTML = jcUnitOptions(p.unit || '');
+                if (descElUp && (p.item_desc || '')) descElUp.value = p.item_desc;
                 if (remEl && (p.remark || '') !== '') remEl.value = p.remark || '';
                 return;
             }
@@ -844,13 +848,14 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
                 return el ? el.value : '';
             }
             var code = val('item_code[]').trim();
-            var desc = val('item_desc[]').trim();
+            // Preserve internal line breaks; only trim outer whitespace (same as Sales Quotation)
+            var desc = String(val('item_desc[]') || '').replace(/^\s+|\s+$/g, '');
             var remark = val('item_remark[]').trim();
             var qty = parseFloat(val('qty[]')) || 0;
             if (code === '' && desc === '' && remark === '' && qty === 0) return;
             lines.push({
                 item_code: code,
-                item_desc: val('item_desc[]'),
+                item_desc: desc,
                 remark: val('item_remark[]'),
                 unit: val('unit[]'),
                 qty: val('qty[]'),

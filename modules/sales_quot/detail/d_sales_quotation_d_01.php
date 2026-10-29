@@ -7,6 +7,7 @@ if (!isset($con)) {
     require('../../../db.php');
     include('../../../auth.php');
 }
+require_once __DIR__ . '/../../../includes/erp_paths.php';
 
 $owns_output_buffer = !isset($con);
 if ($owns_output_buffer) {
@@ -16,6 +17,16 @@ if ($owns_output_buffer) {
 $company_code = $_SESSION['company_code'] ?? '';
 $branch_code  = $_SESSION['branch_code']  ?? '';
 $user         = $_SESSION['username']     ?? '';
+
+// Default stock location for item lookup (same pattern as Stock Transfer Out)
+$sq_item_location = '';
+try {
+    $stmt_loc = $con->prepare("SELECT location_code FROM branch_user WHERE user_id = ? AND branch_code = ?");
+    $stmt_loc->execute([$user, $branch_code]);
+    $sq_item_location = trim((string) ($stmt_loc->fetchColumn() ?: ''));
+} catch (Exception $e) {
+    error_log('SQ location fetch error: ' . $e->getMessage());
+}
 
 // Unit list from item_unit (same source/UI as Material Request / Stock Transfer)
 $unit_list = [];
@@ -78,7 +89,7 @@ if (!function_exists('sq_blank_line')) {
             <td data-label="Code"><input type="text" class="form-control form-control-sm detail-input si-code" name="item_code[]" placeholder="Select item" readonly style="cursor:pointer;" onfocus="openItemSearch(this)" onclick="openItemSearch(this)"></td>
             <td class="si-desc-cell" data-label="Description">
                 <div class="detail-cell">
-                    <input type="text" class="form-control form-control-sm detail-input si-desc" name="item_desc[]" placeholder="Description">
+                    <textarea class="form-control form-control-sm detail-input si-desc" name="item_desc[]" rows="1" placeholder="Description"></textarea>
                     <button type="button" class="detail-more" tabindex="-1" onclick="sqOpenDescMore(this)">More..</button>
                 </div>
             </td>
@@ -87,7 +98,7 @@ if (!function_exists('sq_blank_line')) {
                 <button type="button" class="detail-more" tabindex="-1" onclick="sqOpenRemarkMore(this)">More..</button>
             </td>
             <td data-label="Qty"><input type="number" class="form-control form-control-sm detail-input" name="qty[]" placeholder="0" value="0" style="text-align:right;"></td>
-            <td data-label="Unit"><select class="form-control form-control-sm detail-input text-center" name="unit[]">' . $unit_opts . '</select></td>
+            <td data-label="Unit" class="sq-unit-col"><select class="form-control form-control-sm detail-input text-center" name="unit[]">' . $unit_opts . '</select></td>
             <td data-label="Rate"><input type="number" class="form-control form-control-sm detail-input" name="rate[]" placeholder="0.00" value="0.00" step="0.01" style="text-align:right;"></td>
             <td data-label="Amount"><input type="text" class="form-control form-control-sm detail-input si-amount" name="amount[]" placeholder="0.00" readonly style="text-align:right;"></td>
             <td data-label="Discount">
@@ -98,7 +109,7 @@ if (!function_exists('sq_blank_line')) {
             </td>
             <td data-label="VAT">
                 <div class="detail-split-inputs">
-                    <input type="text" class="form-control form-control-sm detail-input" name="vat[]" value="' . htmlspecialchars($vat_pct) . '" readonly style="text-align:center;">
+                    <input type="number" class="form-control form-control-sm detail-input" name="vat[]" value="' . htmlspecialchars($vat_pct) . '" step="0.01" style="text-align:center;">
                     <input type="text" class="form-control form-control-sm detail-input" name="vat_amount[]" placeholder="0.00" readonly style="text-align:right;">
                 </div>
             </td>
@@ -121,33 +132,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     exit;
 }
 
-// Handle Item Search (AJAX) — same source as Sales Invoice
+// Handle Item Search (AJAX) — same approach as Stock Transfer Out (item_master + optional stock)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'search_items') {
     if ($owns_output_buffer && ob_get_level() > 0) {
         ob_end_clean();
     }
-    header('Content-Type: application/json');
+    header('Content-Type: application/json; charset=utf-8');
 
-    $user_id = $_SESSION['username'] ?? '';
-    $term    = '%' . trim($_POST['term'] ?? '') . '%';
+    $term = '%' . trim($_POST['term'] ?? '') . '%';
+    $loc  = trim($_POST['location'] ?? $sq_item_location);
 
     try {
-        $sql = "SELECT ils.itemcode,
-                       im.item_name,
-                       im.stock_unit,
-                       im.tax_amount,
-                       ils.stockqty,
-                       bu.location_code,
+        $sql = "SELECT TOP 200 i.item_code AS itemcode,
+                       i.item_name,
+                       i.stock_unit,
+                       i.oem_code,
+                       ISNULL(v.stockqty, 0) AS stockqty,
                        ISNULL((SELECT TOP 1 retail_price FROM item_price
-                                WHERE item_code = ils.itemcode), 0) AS retail_price
-                FROM branch_user bu
-                INNER JOIN view_item_ledger_summary ils ON ils.locationcode = bu.location_code
-                INNER JOIN item_master im ON im.item_code = ils.itemcode
-                WHERE bu.user_id = ? AND bu.branch_code = ?
-                AND (ils.itemcode LIKE ? OR im.item_name LIKE ?)";
+                                WHERE item_code = i.item_code), 0) AS retail_price
+                FROM item_master i
+                LEFT JOIN view_item_ledger_summary v
+                  ON i.item_code = v.itemcode AND v.locationcode = ?
+                WHERE i.item_code LIKE ? OR i.item_name LIKE ? OR ISNULL(i.oem_code, '') LIKE ?
+                ORDER BY i.item_code";
         $stmt = $con->prepare($sql);
-        $stmt->execute([$user_id, $branch_code, $term, $term]);
-        echo json_encode($stmt->fetchAll(PDO::FETCH_ASSOC));
+        $stmt->execute([$loc, $term, $term, $term]);
+        $items = [];
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $items[] = [
+                'itemcode'     => trim((string) $row['itemcode']),
+                'item_name'    => trim((string) ($row['item_name'] ?? '')),
+                'stock_unit'   => trim((string) ($row['stock_unit'] ?? '')),
+                'oem_code'     => trim((string) ($row['oem_code'] ?? '')),
+                'stockqty'     => (float) ($row['stockqty'] ?? 0),
+                'retail_price' => (float) ($row['retail_price'] ?? 0),
+            ];
+        }
+        echo json_encode($items);
     } catch (Exception $e) {
         error_log('SQ Item search error: ' . $e->getMessage());
         echo json_encode(['error' => $e->getMessage()]);
@@ -206,7 +227,7 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
                         <th style="min-width:200px;">Description</th>
                         <th style="width:72px;">Remark</th>
                         <th style="width:72px;" class="num">Qty</th>
-                        <th style="width:64px;">Unit</th>
+                        <th style="min-width:88px;width:96px;">Unit</th>
                         <th style="width:84px;" class="num">Rate</th>
                         <th style="width:92px;" class="num">Amount</th>
                         <th style="width:130px;" class="split">Disc % / Amt</th>
@@ -250,11 +271,11 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
     <td class="srl-col" data-label="Srl"><?php echo htmlspecialchars($_dl_srl); ?></td>
     <td data-label="Line"><input type="text" class="form-control form-control-sm detail-input text-center" name="line_no[]" value="<?php echo htmlspecialchars($_dl_line); ?>" readonly></td>
     <td data-label="Code"><input type="text" class="form-control form-control-sm detail-input si-code" name="item_code[]" value="<?php echo htmlspecialchars($_dl['item_code'] ?? ''); ?>"
-             <?php echo $_detail_view ? 'readonly' : 'onfocus="openItemSearch(this)" onclick="openItemSearch(this)"'; ?>
+             <?php echo $_detail_view ? 'readonly' : 'readonly onfocus="openItemSearch(this)" onclick="openItemSearch(this)"'; ?>
              style="cursor:<?php echo $_detail_view ? 'default' : 'pointer'; ?>;"></td>
     <td class="si-desc-cell" data-label="Description">
         <div class="detail-cell">
-            <input type="text" class="form-control form-control-sm detail-input si-desc" name="item_desc[]" value="<?php echo htmlspecialchars($_dl['item_description'] ?? ''); ?>" <?php echo $_dl_desc_ro; ?>>
+            <textarea class="form-control form-control-sm detail-input si-desc" name="item_desc[]" rows="1" <?php echo $_dl_desc_ro; ?>><?php echo htmlspecialchars($_dl['item_description'] ?? ''); ?></textarea>
             <button type="button" class="detail-more" tabindex="-1" onclick="sqOpenDescMore(this)">More..</button>
         </div>
     </td>
@@ -263,7 +284,7 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
         <button type="button" class="detail-more" tabindex="-1" onclick="sqOpenRemarkMore(this)">More..</button>
     </td>
     <td data-label="Qty"><input type="number" class="form-control form-control-sm detail-input" name="qty[]" value="<?php echo htmlspecialchars((string) $_dl_qty); ?>" <?php echo $_dl_ro; ?> style="text-align:right;"></td>
-    <td data-label="Unit"><select class="form-control form-control-sm detail-input text-center" name="unit[]" <?php echo $_detail_view ? 'disabled' : ''; ?>><?php echo sq_unit_options_html($unit_list, $_dl_unit); ?></select></td>
+    <td data-label="Unit" class="sq-unit-col"><select class="form-control form-control-sm detail-input text-center" name="unit[]" <?php echo $_detail_view ? 'disabled' : ''; ?>><?php echo sq_unit_options_html($unit_list, $_dl_unit); ?></select></td>
     <td data-label="Rate"><input type="number" class="form-control form-control-sm detail-input" name="rate[]" value="<?php echo htmlspecialchars((string) $_dl_rate); ?>" <?php echo $_dl_ro; ?> step="0.01" style="text-align:right;"></td>
     <td data-label="Amount"><input type="text" class="form-control form-control-sm detail-input si-amount" name="amount[]" value="<?php echo htmlspecialchars(number_format($_dl_amount, 2, '.', '')); ?>" readonly style="text-align:right;"></td>
     <td data-label="Discount">
@@ -274,7 +295,7 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
     </td>
     <td data-label="VAT">
         <div class="detail-split-inputs">
-            <input type="text" class="form-control form-control-sm detail-input" name="vat[]" value="<?php echo htmlspecialchars($_dl_vat_pct); ?>" readonly style="text-align:center;">
+            <input type="number" class="form-control form-control-sm detail-input" name="vat[]" value="<?php echo htmlspecialchars($_dl_vat_pct); ?>" <?php echo $_dl_ro; ?> step="0.01" style="text-align:center;">
             <input type="text" class="form-control form-control-sm detail-input" name="vat_amount[]" value="<?php echo htmlspecialchars(number_format($_dl_vat_amt, 2, '.', '')); ?>" readonly style="text-align:right;">
         </div>
     </td>
@@ -397,8 +418,25 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
     </div>
 </div>
 
+<style>
+.detail-table.si-lines th:nth-child(7),
+.detail-table.si-lines td.sq-unit-col,
+.detail-table.si-lines td[data-label="Unit"] {
+    min-width: 88px;
+    width: 96px;
+}
+.detail-table.si-lines td.sq-unit-col select.detail-input {
+    min-width: 80px;
+    width: 100%;
+}
+.detail-table.si-lines textarea.detail-input.si-desc {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+</style>
 <script>
-    var SQ_DETAIL_URL = 'detail/d_sales_quotation_d_01.php';
+    var SQ_DETAIL_URL = <?php echo json_encode(erp_url('modules/sales_quot/detail/d_sales_quotation_d_01')); ?>;
+    var SQ_ITEM_LOC = <?php echo json_encode($sq_item_location); ?>;
     var SQ_UNITS = <?php echo json_encode($unit_list); ?>;
     var VAT_PCT = <?php
         $js_vat = 0;
@@ -529,7 +567,9 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
         setInputValue(row, 'amount[]', lineTotal, 2);
 
         var afterDiscount = Math.max(0, roundMoney(lineTotal - discountAmt));
-        var vatPct = getNumericInput(row, 'vat[]') || VAT_PCT;
+        // Honour 0% VAT (do not fall back to branch default when user clears/sets 0)
+        var vatEl = row.querySelector('input[name="vat[]"]');
+        var vatPct = vatEl ? (parseFloat(vatEl.value) || 0) : VAT_PCT;
         var vatAmount = roundMoney((afterDiscount * vatPct) / 100);
         setInputValue(row, 'vat_amount[]', vatAmount, 2);
 
@@ -582,7 +622,7 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
     // ── Description More.. ──────────────────────────────────────────────────
     function sqOpenDescMore(btn) {
         var row = btn.closest('tr');
-        _sqDescInput = row.querySelector('input[name="item_desc[]"]');
+        _sqDescInput = row.querySelector('textarea[name="item_desc[]"], input[name="item_desc[]"]');
         var ta = document.getElementById('sqDescText');
         ta.value = _sqDescInput ? _sqDescInput.value : '';
         ta.readOnly = SQ_VIEW_MODE && _sqDescInput && _sqDescInput.readOnly;
@@ -592,6 +632,7 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
     }
     function sqSaveDescMore() {
         if (_sqDescInput && !_sqDescInput.readOnly) {
+            // Keep exact line breaks from the More.. editor
             _sqDescInput.value = document.getElementById('sqDescText').value;
         }
         sqCloseDescMore();
@@ -626,9 +667,10 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
         _sqRemarkInput = null;
     }
 
-    // ── Item search ─────────────────────────────────────────────────────────
+    // ── Item search (Stock Transfer Out style) ──────────────────────────────
+    var sqItemResults = [];
     function openItemSearch(inputElement) {
-        if (inputElement.readOnly && SQ_VIEW_MODE) return;
+        if (SQ_VIEW_MODE && inputElement.readOnly) return;
         currentLineInput = inputElement;
         document.getElementById('itemSearchModal').style.display = 'flex';
         document.body.style.overflow = 'hidden';
@@ -650,7 +692,8 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
         var formData = new FormData();
         formData.append('action', 'search_items');
         formData.append('term', query);
-        fetch(SQ_DETAIL_URL, { method: 'POST', body: formData })
+        formData.append('location', SQ_ITEM_LOC || '');
+        fetch(SQ_DETAIL_URL, { method: 'POST', body: formData, credentials: 'same-origin' })
             .then(function (r) {
                 if (!r.ok) throw new Error('Server returned ' + r.status);
                 return r.json();
@@ -668,32 +711,33 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
     function renderItemResults(data) {
         var tbody = document.getElementById('itemResultsBody');
         if (data && data.error) {
-            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:20px;color:red;">Error: ' + data.error + '</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:20px;color:red;">Error: ' + sqEsc(data.error) + '</td></tr>';
             return;
         }
         if (!Array.isArray(data) || data.length === 0) {
             tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:20px;color:#9ca3af;">No items found</td></tr>';
             return;
         }
-        tbody.innerHTML = data.map(function (item) {
-            var code = item.itemcode ? String(item.itemcode).replace(/'/g, "\\'") : '';
-            var name = item.item_name ? String(item.item_name).replace(/'/g, "\\'") : '';
-            var unit = item.stock_unit ? String(item.stock_unit).replace(/'/g, "\\'") : '';
-            var stock = item.stockqty || '0';
-            var rate = item.retail_price || '0';
+        sqItemResults = data;
+        tbody.innerHTML = data.map(function (item, i) {
             return '<tr>'
-                + '<td>' + (item.itemcode || '') + '</td>'
-                + '<td>' + (item.item_name || '') + '</td>'
-                + '<td style="text-align:right;">' + stock + '</td>'
-                + '<td style="text-align:center;"><button type="button" class="btn btn-primary btn-sm" onclick="selectItem(\'' + code + '\',\'' + name + '\',\'' + unit + '\',\'' + rate + '\')"><i class="fa fa-check"></i> Select</button></td>'
+                + '<td>' + sqEsc(item.itemcode || '') + '</td>'
+                + '<td>' + sqEsc(item.item_name || '') + '</td>'
+                + '<td style="text-align:right;">' + (parseFloat(item.stockqty) || 0).toFixed(2) + '</td>'
+                + '<td style="text-align:center;"><button type="button" class="btn btn-primary btn-sm" onclick="selectItemIdx(' + i + ')"><i class="fa fa-check"></i> Select</button></td>'
                 + '</tr>';
         }).join('');
+    }
+    function selectItemIdx(i) {
+        var item = sqItemResults[i];
+        if (!item || !currentLineInput) { closeItemSearch(); return; }
+        selectItem(item.itemcode || '', item.item_name || '', item.stock_unit || '', item.retail_price || 0);
     }
     function selectItem(code, description, unit, rate) {
         if (!currentLineInput) return;
         var row = currentLineInput.closest('tr');
         var codeInput = row.querySelector('input[name="item_code[]"]');
-        var descInput = row.querySelector('input[name="item_desc[]"]');
+        var descInput = row.querySelector('textarea[name="item_desc[]"], input[name="item_desc[]"]');
         var unitSel   = row.querySelector('select[name="unit[]"]');
         var rateInput = row.querySelector('input[name="rate[]"]');
         if (codeInput) codeInput.value = code;
@@ -713,7 +757,8 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
                 return el ? el.value : '';
             }
             var code = val('item_code[]').trim();
-            var desc = val('item_desc[]').trim();
+            // Preserve internal line breaks; only trim outer whitespace
+            var desc = String(val('item_desc[]') || '').replace(/^\s+|\s+$/g, '');
             var remark = val('item_remark[]').trim();
             var qty = parseFloat(val('qty[]')) || 0;
             // Keep free-text quotation lines (no item code) when they have content
@@ -743,7 +788,7 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
         updateSummary();
     });
 
-    var SQ_DIGIT_DECIMALS = { 'qty[]': null, 'rate[]': null, 'discount_pct[]': 2, 'discount_amt[]': 2 };
+    var SQ_DIGIT_DECIMALS = { 'qty[]': null, 'rate[]': null, 'discount_pct[]': 2, 'discount_amt[]': 2, 'vat[]': 2 };
     function isSqDigitBox(el) {
         return el && el.tagName === 'INPUT' && el.type === 'number' && !el.readOnly
             && SQ_DIGIT_DECIMALS.hasOwnProperty(el.name) && el.closest('#detailTableBody');
