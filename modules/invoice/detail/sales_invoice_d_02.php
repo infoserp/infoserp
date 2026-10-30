@@ -437,7 +437,6 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
         </div>
         <div class="erp-search-foot">
             <button type="button" class="erp-search-btn" onclick="si02CloseDescMore()">Close</button>
-            <button type="button" class="erp-search-btn primary" id="si02DescSaveBtn" onclick="si02SaveDescMore()">Save</button>
         </div>
     </div>
 </div>
@@ -454,7 +453,6 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
         </div>
         <div class="erp-search-foot">
             <button type="button" class="erp-search-btn" onclick="si02CloseRemarkMore()">Close</button>
-            <button type="button" class="erp-search-btn primary" id="si02RemarkSaveBtn" onclick="si02SaveRemarkMore()">Save</button>
         </div>
     </div>
 </div>
@@ -681,18 +679,14 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
         var ta = document.getElementById('si02DescText');
         ta.value = _si02DescInput ? _si02DescInput.value : '';
         ta.readOnly = !si02IsEditable() || (_si02DescInput && _si02DescInput.readOnly);
-        document.getElementById('si02DescSaveBtn').style.display = ta.readOnly ? 'none' : '';
         document.getElementById('si02DescModal').style.display = 'flex';
         ta.focus();
     }
-    function si02SaveDescMore() {
+    function si02CloseDescMore() {
+        // Apply to line field; document toolbar Save persists to DB
         if (_si02DescInput && !_si02DescInput.readOnly) {
-            // Keep exact line breaks from the More.. editor (same as Sales Quotation)
             _si02DescInput.value = document.getElementById('si02DescText').value;
         }
-        si02CloseDescMore();
-    }
-    function si02CloseDescMore() {
         document.getElementById('si02DescModal').style.display = 'none';
         _si02DescInput = null;
     }
@@ -703,20 +697,17 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
         ta.value = _si02RemarkInput ? _si02RemarkInput.value : '';
         var editable = si02IsEditable();
         ta.readOnly = !editable;
-        document.getElementById('si02RemarkSaveBtn').style.display = editable ? '' : 'none';
         document.getElementById('si02RemarkModal').style.display = 'flex';
         ta.focus();
     }
-    function si02SaveRemarkMore() {
+    function si02CloseRemarkMore() {
+        // Apply to line field; document toolbar Save persists to DB
         if (_si02RemarkInput && !document.getElementById('si02RemarkText').readOnly) {
             _si02RemarkInput.value = document.getElementById('si02RemarkText').value;
             var row = _si02RemarkInput.closest('.detail-row');
             var preview = row ? row.querySelector('.si02-remark-preview') : null;
             if (preview) preview.value = _si02RemarkInput.value;
         }
-        si02CloseRemarkMore();
-    }
-    function si02CloseRemarkMore() {
         document.getElementById('si02RemarkModal').style.display = 'none';
         _si02RemarkInput = null;
     }

@@ -371,7 +371,6 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
         </div>
         <div class="erp-search-foot">
             <button type="button" class="erp-search-btn" onclick="jcCloseDescMore()">Close</button>
-            <button type="button" class="erp-search-btn primary" id="jcDescSaveBtn" onclick="jcSaveDescMore()">Save</button>
         </div>
     </div>
 </div>
@@ -415,7 +414,6 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
         </div>
         <div class="erp-search-foot">
             <button type="button" class="erp-search-btn" onclick="jcCloseMoreData()">Close</button>
-            <button type="button" class="erp-search-btn primary" id="jcMdSaveBtn" onclick="jcSaveMoreData()">Save</button>
         </div>
     </div>
 </div>
@@ -604,18 +602,14 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
         var ta = document.getElementById('jcDescText');
         ta.value = _jcDescInput ? _jcDescInput.value : '';
         ta.readOnly = JC_VIEW_MODE && _jcDescInput && _jcDescInput.readOnly;
-        document.getElementById('jcDescSaveBtn').style.display = ta.readOnly ? 'none' : '';
         document.getElementById('jcDescModal').style.display = 'flex';
         ta.focus();
     }
-    function jcSaveDescMore() {
+    function jcCloseDescMore() {
+        // Apply to line field; document toolbar Save persists to DB
         if (_jcDescInput && !_jcDescInput.readOnly) {
-            // Keep exact line breaks from the More.. editor (same as Sales Quotation)
             _jcDescInput.value = document.getElementById('jcDescText').value;
         }
-        jcCloseDescMore();
-    }
-    function jcCloseDescMore() {
         document.getElementById('jcDescModal').style.display = 'none';
         _jcDescInput = null;
     }
@@ -646,29 +640,24 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
                 el.readOnly = !editable;
             }
         });
-        document.getElementById('jcMdSaveBtn').style.display = editable ? '' : 'none';
         document.getElementById('jcMoreDataModal').style.display = 'flex';
         document.getElementById('jcMdEnquiry').focus();
     }
-    function jcSaveMoreData() {
-        if (!_jcMoreRow || !jcIsEditable()) {
-            jcCloseMoreData();
-            return;
-        }
-        function setHv(name, val) {
-            var el = _jcMoreRow.querySelector('input[name="' + name + '"]');
-            if (el) el.value = val;
-        }
-        setHv('enquiry_no[]', document.getElementById('jcMdEnquiry').value);
-        setHv('estimate_no[]', document.getElementById('jcMdEstimate').value);
-        setHv('quotation_no[]', document.getElementById('jcMdQuotation').value);
-        setHv('salesorder_no[]', document.getElementById('jcMdSalesorder').value);
-        setHv('line_po_no[]', document.getElementById('jcMdPo').value);
-        setHv('item_serialno[]', document.getElementById('jcMdSerial').value);
-        setHv('item_remark[]', document.getElementById('jcMdRemark').value);
-        jcCloseMoreData();
-    }
     function jcCloseMoreData() {
+        // Apply to line fields; document toolbar Save persists to DB
+        if (_jcMoreRow && jcIsEditable()) {
+            function setHv(name, val) {
+                var el = _jcMoreRow.querySelector('input[name="' + name + '"]');
+                if (el) el.value = val;
+            }
+            setHv('enquiry_no[]', document.getElementById('jcMdEnquiry').value);
+            setHv('estimate_no[]', document.getElementById('jcMdEstimate').value);
+            setHv('quotation_no[]', document.getElementById('jcMdQuotation').value);
+            setHv('salesorder_no[]', document.getElementById('jcMdSalesorder').value);
+            setHv('line_po_no[]', document.getElementById('jcMdPo').value);
+            setHv('item_serialno[]', document.getElementById('jcMdSerial').value);
+            setHv('item_remark[]', document.getElementById('jcMdRemark').value);
+        }
         document.getElementById('jcMoreDataModal').style.display = 'none';
         _jcMoreRow = null;
     }

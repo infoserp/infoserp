@@ -208,7 +208,6 @@ $rvd_self_url = '/' . ltrim(
         </div>
         <div class="erp-search-foot">
             <button type="button" class="erp-search-btn" onclick="rvdCloseMore()">Close</button>
-            <button type="button" class="erp-search-btn primary" id="rvdMoreSaveBtn" onclick="rvdSaveMore()">OK</button>
         </div>
     </div>
 </div>
@@ -557,19 +556,15 @@ $rvd_self_url = '/' . ltrim(
         var ta = document.getElementById('rvdMoreText');
         ta.value = rvdField(_rvdMoreLine, 'narration').value;
         ta.readOnly = !rvdEditable;
-        document.getElementById('rvdMoreSaveBtn').style.display = rvdEditable ? '' : 'none';
         document.getElementById('rvdMoreModal').style.display = 'flex';
         ta.focus();
     }
 
-    function rvdSaveMore() {
+    function rvdCloseMore() {
+        // Apply to line field; document toolbar Save persists to DB
         if (_rvdMoreLine && rvdEditable) {
             rvdField(_rvdMoreLine, 'narration').value = document.getElementById('rvdMoreText').value;
         }
-        rvdCloseMore();
-    }
-
-    function rvdCloseMore() {
         document.getElementById('rvdMoreModal').style.display = 'none';
         _rvdMoreLine = null;
     }

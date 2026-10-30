@@ -197,8 +197,7 @@ if ($vt_initial_json === false) {
             <textarea id="vtDescText" class="vt-textarea" rows="9" placeholder="Enter description..."></textarea>
         </div>
         <div class="vt-foot">
-            <button type="button" class="vt-foot-btn" onclick="vtCloseDescMore()">Cancel</button>
-            <button type="button" class="vt-foot-btn primary" id="vtDescSaveBtn" onclick="vtSaveDescMore()">Save</button>
+            <button type="button" class="vt-foot-btn" onclick="vtCloseDescMore()">Close</button>
         </div>
     </div>
 </div>
@@ -856,36 +855,29 @@ if ($vt_initial_json === false) {
         var ta = document.getElementById('vtDescText');
         ta.value = sel ? sel.value : '';
         ta.readOnly = VT_READONLY;
-        document.getElementById('vtDescSaveBtn').style.display = VT_READONLY ? 'none' : '';
         document.getElementById('vtDescModal').style.display = 'flex';
         ta.focus();
     };
 
-    window.vtSaveDescMore = function () {
-        if (!vtDescRow || VT_READONLY) {
-            vtCloseDescMore();
-            return;
-        }
-        var sel = vtDescRow.querySelector('[data-f="remark"]');
-        var text = document.getElementById('vtDescText').value;
-        if (sel) {
-            // Ensure the custom text exists as an option, then select it
-            var found = false;
-            Array.prototype.forEach.call(sel.options, function (opt) {
-                if (opt.value === text) found = true;
-            });
-            if (!found) {
-                var opt = document.createElement('option');
-                opt.value = text;
-                opt.textContent = text.length > 80 ? text.slice(0, 80) + '…' : text;
-                sel.appendChild(opt);
-            }
-            sel.value = text;
-        }
-        vtCloseDescMore();
-    };
-
     window.vtCloseDescMore = function () {
+        // Apply description to the row; Variable Terms Save persists to DB
+        if (vtDescRow && !VT_READONLY) {
+            var sel = vtDescRow.querySelector('[data-f="remark"]');
+            var text = document.getElementById('vtDescText').value;
+            if (sel) {
+                var found = false;
+                Array.prototype.forEach.call(sel.options, function (opt) {
+                    if (opt.value === text) found = true;
+                });
+                if (!found) {
+                    var opt = document.createElement('option');
+                    opt.value = text;
+                    opt.textContent = text.length > 80 ? text.slice(0, 80) + '…' : text;
+                    sel.appendChild(opt);
+                }
+                sel.value = text;
+            }
+        }
         document.getElementById('vtDescModal').style.display = 'none';
         vtDescRow = null;
     };

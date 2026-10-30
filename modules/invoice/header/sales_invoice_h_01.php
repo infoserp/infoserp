@@ -1495,7 +1495,6 @@ $si_self_url = '/' . ltrim(
         </div>
         <div class="erp-search-foot">
             <button type="button" class="erp-search-btn" onclick="closeMoreModal()">Close</button>
-            <button type="button" class="erp-search-btn primary" onclick="saveMore()">Save</button>
         </div>
     </div>
 </div>
@@ -1521,15 +1520,14 @@ $si_self_url = '/' . ltrim(
         document.getElementById('moreModalTextarea').focus();
     }
 
-    function saveMore() {
-        const input = document.querySelector('[name="' + _moreFieldName + '"]');
-        if (input) {
-            input.value = document.getElementById('moreModalTextarea').value;
-        }
-        closeMoreModal();
-    }
-
     function closeMoreModal() {
+        // Apply to header field; document toolbar Save persists to DB
+        if (_moreFieldName) {
+            const input = document.querySelector('[name="' + _moreFieldName + '"]');
+            if (input) {
+                input.value = document.getElementById('moreModalTextarea').value;
+            }
+        }
         document.getElementById('moreCommentModal').style.display = 'none';
         _moreFieldName = '';
     }

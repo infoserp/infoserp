@@ -396,7 +396,6 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
         </div>
         <div class="erp-search-foot">
             <button type="button" class="erp-search-btn" onclick="sqCloseDescMore()">Close</button>
-            <button type="button" class="erp-search-btn primary" id="sqDescSaveBtn" onclick="sqSaveDescMore()">Save</button>
         </div>
     </div>
 </div>
@@ -413,7 +412,6 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
         </div>
         <div class="erp-search-foot">
             <button type="button" class="erp-search-btn" onclick="sqCloseRemarkMore()">Close</button>
-            <button type="button" class="erp-search-btn primary" id="sqRemarkSaveBtn" onclick="sqSaveRemarkMore()">Save</button>
         </div>
     </div>
 </div>
@@ -626,18 +624,14 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
         var ta = document.getElementById('sqDescText');
         ta.value = _sqDescInput ? _sqDescInput.value : '';
         ta.readOnly = SQ_VIEW_MODE && _sqDescInput && _sqDescInput.readOnly;
-        document.getElementById('sqDescSaveBtn').style.display = ta.readOnly ? 'none' : '';
         document.getElementById('sqDescModal').style.display = 'flex';
         ta.focus();
     }
-    function sqSaveDescMore() {
+    function sqCloseDescMore() {
+        // Apply to line field; document toolbar Save persists to DB
         if (_sqDescInput && !_sqDescInput.readOnly) {
-            // Keep exact line breaks from the More.. editor
             _sqDescInput.value = document.getElementById('sqDescText').value;
         }
-        sqCloseDescMore();
-    }
-    function sqCloseDescMore() {
         document.getElementById('sqDescModal').style.display = 'none';
         _sqDescInput = null;
     }
@@ -652,11 +646,11 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
         var addBtn = document.getElementById('btnAddLine');
         var editable = addBtn ? !addBtn.disabled : !SQ_VIEW_MODE;
         ta.readOnly = !editable;
-        document.getElementById('sqRemarkSaveBtn').style.display = editable ? '' : 'none';
         document.getElementById('sqRemarkModal').style.display = 'flex';
         ta.focus();
     }
-    function sqSaveRemarkMore() {
+    function sqCloseRemarkMore() {
+        // Apply to line field; document toolbar Save persists to DB
         if (_sqRemarkInput && !document.getElementById('sqRemarkText').readOnly) {
             _sqRemarkInput.value = document.getElementById('sqRemarkText').value;
             var btn = _sqRemarkInput.parentNode
@@ -670,9 +664,6 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
                 }
             }
         }
-        sqCloseRemarkMore();
-    }
-    function sqCloseRemarkMore() {
         document.getElementById('sqRemarkModal').style.display = 'none';
         _sqRemarkInput = null;
     }
