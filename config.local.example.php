@@ -37,4 +37,8 @@ return [
     // ── App ─────────────────────────────────────────────────────────────────
     'erp_web_root' => '/',
     'timezone'     => 'Asia/Dubai',
+
+    // Session (PHP session auth — not Sanctum)
+    'session_idle_seconds' => 3600,   // 60 minutes idle → silent redirect to login
+    'session_max_seconds'  => 43200,  // 12 hours absolute max from login
 ];

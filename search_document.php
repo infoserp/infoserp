@@ -14,19 +14,54 @@ $doc_code = isset($_GET['doc_code']) ? strtoupper(trim($_GET['doc_code'])) : 'MR
 $company_code = isset($_SESSION['company_code']) ? $_SESSION['company_code'] : '';
 $branch_code = isset($_SESSION['branch_code']) ? $_SESSION['branch_code'] : '';
 
-// Tables searched per doc_code (whitelist — table/column names are never taken from the request).
-//   ref_col     : header column returned as tracking_no and searched by the "tracking_no" option
-//   job_col     : header job column (searched together with the detail lines' job_no), or null
-//   with_customer: join ac_master and return/search customer name (Sales Quotation)
+/**
+ * Tables searched per doc_code (whitelist — never take table/column names from the request).
+ *
+ *   ref_col        : header reference returned as tracking_no (and labelled via $search_ref_label)
+ *   job_col        : header job column, or null
+ *   detail_has_job : detail table has job_no (used for select + search)
+ *   with_customer  : join ac_master; return/search customer name
+ *   detail_ref_col : optional detail column aggregated into tracking_no when header ref is blank
+ *                    (e.g. job_card_d.quotation_no)
+ */
 $search_sources = [
-    'MR' => ['h' => 'material_request_h', 'd' => 'material_request_d', 'ref_col' => 'tracking_no', 'job_col' => null],
-    'SI' => ['h' => 'invoice_h',          'd' => 'invoice_d',          'ref_col' => 'tracking_no', 'job_col' => 'job_no'],
-    // sales_quotation_h has no job_no — only detail lines do; join customer for Find results
-    'SQ' => ['h' => 'sales_quotation_h',  'd' => 'sales_quotation_d',  'ref_col' => 'tracking_no', 'job_col' => null, 'with_customer' => true],
-    'JC' => ['h' => 'job_card_h',         'd' => 'job_card_d',         'ref_col' => 'tracking_no', 'job_col' => 'project_no'],
-    'RV' => ['h' => 'chq_receipt_h',      'd' => 'chq_receipt_d',      'ref_col' => 'chq_no',      'job_col' => null],
-    'TO' => ['h' => 'stock_transfer_out_h', 'd' => 'stock_transfer_out_d', 'ref_col' => 'requisition_no', 'job_col' => null],
-    'TI' => ['h' => 'stock_transfer_in_h',  'd' => 'stock_transfer_in_d',  'ref_col' => 'location_from',  'job_col' => null],
+    'MR' => [
+        'h' => 'material_request_h', 'd' => 'material_request_d',
+        'ref_col' => 'tracking_no', 'job_col' => null,
+        'detail_has_job' => true, 'with_customer' => false,
+    ],
+    'SI' => [
+        'h' => 'invoice_h', 'd' => 'invoice_d',
+        'ref_col' => 'tracking_no', 'job_col' => 'job_no',
+        'detail_has_job' => true, 'with_customer' => true,
+    ],
+    'SQ' => [
+        'h' => 'sales_quotation_h', 'd' => 'sales_quotation_d',
+        'ref_col' => 'tracking_no', 'job_col' => null,
+        'detail_has_job' => true, 'with_customer' => true,
+    ],
+    'JC' => [
+        'h' => 'job_card_h', 'd' => 'job_card_d',
+        // Quotation No on header; fall back to detail quotation_no
+        'ref_col' => 'qtn_no', 'job_col' => null,
+        'detail_has_job' => false, 'with_customer' => true,
+        'detail_ref_col' => 'quotation_no',
+    ],
+    'RV' => [
+        'h' => 'chq_receipt_h', 'd' => 'chq_receipt_d',
+        'ref_col' => 'chq_no', 'job_col' => null,
+        'detail_has_job' => false, 'with_customer' => false,
+    ],
+    'TO' => [
+        'h' => 'stock_transfer_out_h', 'd' => 'stock_transfer_out_d',
+        'ref_col' => 'requisition_no', 'job_col' => null,
+        'detail_has_job' => false, 'with_customer' => false,
+    ],
+    'TI' => [
+        'h' => 'stock_transfer_in_h', 'd' => 'stock_transfer_in_d',
+        'ref_col' => 'location_from', 'job_col' => null,
+        'detail_has_job' => false, 'with_customer' => false,
+    ],
 ];
 if (!isset($search_sources[$doc_code])) {
     $doc_code = 'MR';
@@ -37,31 +72,58 @@ $tbl_d = $src['d'];
 $ref_col = $src['ref_col'];
 $job_col = $src['job_col'];
 $with_customer = !empty($src['with_customer']);
+$detail_has_job = !empty($src['detail_has_job']);
+$detail_ref_col = isset($src['detail_ref_col']) ? $src['detail_ref_col'] : null;
 
 // Helper function to force UTF-8
 function force_utf8($str)
 {
-    if ($str === null)
+    if ($str === null) {
         return '';
+    }
     return mb_convert_encoding($str, 'UTF-8', 'ISO-8859-1');
 }
 
-$detail_jobs = "STUFF((SELECT DISTINCT ', ' + d.job_no 
-                      FROM $tbl_d d 
-                      WHERE d.doc_no = h.doc_no 
-                        AND d.company_code = h.company_code 
+$detail_jobs = '';
+if ($detail_has_job) {
+    $detail_jobs = "STUFF((SELECT DISTINCT ', ' + d.job_no
+                      FROM $tbl_d d
+                      WHERE d.doc_no = h.doc_no
+                        AND d.company_code = h.company_code
                         AND d.branch_code = h.branch_code
                         AND d.job_no IS NOT NULL AND d.job_no <> ''
                       FOR XML PATH('')), 1, 2, '')";
-$job_select = $job_col !== null
-    ? "COALESCE(NULLIF(LTRIM(RTRIM(h.$job_col)), ''), $detail_jobs)"
-    : $detail_jobs;
+}
+
+if ($job_col !== null && $detail_has_job) {
+    $job_select = "COALESCE(NULLIF(LTRIM(RTRIM(h.$job_col)), ''), $detail_jobs)";
+} elseif ($job_col !== null) {
+    $job_select = "NULLIF(LTRIM(RTRIM(h.$job_col)), '')";
+} elseif ($detail_has_job) {
+    $job_select = $detail_jobs;
+} else {
+    $job_select = "CAST('' AS NVARCHAR(100))";
+}
+
+$ref_select = "NULLIF(LTRIM(RTRIM(h.$ref_col)), '')";
+if ($detail_ref_col !== null) {
+    $detail_refs = "STUFF((SELECT DISTINCT ', ' + d.$detail_ref_col
+                      FROM $tbl_d d
+                      WHERE d.doc_no = h.doc_no
+                        AND d.company_code = h.company_code
+                        AND d.branch_code = h.branch_code
+                        AND d.$detail_ref_col IS NOT NULL AND d.$detail_ref_col <> ''
+                      FOR XML PATH('')), 1, 2, '')";
+    $ref_select = "COALESCE($ref_select, $detail_refs)";
+}
 
 $customer_select = $with_customer
     ? ", ISNULL(am.description, '') AS customer_name"
     : ", CAST('' AS NVARCHAR(150)) AS customer_name";
 
-$sql = "SELECT TOP 500 h.doc_no, h.doc_dt, h.$ref_col AS tracking_no, h.narration, 
+$sql = "SELECT TOP 500 h.doc_no, h.doc_dt,
+               $ref_select AS tracking_no,
+               h.narration,
                $job_select AS job_no
                $customer_select
         FROM $tbl_h h ";
@@ -70,7 +132,7 @@ if ($with_customer) {
                 ON am.company_code = h.company_code
                AND am.ac_code = h.ac_code ";
 }
-$sql .= "WHERE h.company_code = ? 
+$sql .= "WHERE h.company_code = ?
           AND h.branch_code = ?";
 
 $params = array($company_code, $branch_code);
@@ -90,39 +152,63 @@ if ($doc_type_filter !== '') {
     $params[] = $doc_type_filter;
 }
 
-if ($type === 'doc_no') {
-    if ($with_customer && $searchTerm !== '') {
-        $sql .= " AND (h.doc_no LIKE ? OR am.description LIKE ? OR h.ac_code LIKE ?)";
-        $params[] = "%{$searchTerm}%";
-        $params[] = "%{$searchTerm}%";
-        $params[] = "%{$searchTerm}%";
-    } else {
-        $sql .= " AND h.doc_no LIKE ?";
-        $params[] = "%{$searchTerm}%";
-    }
-} else if ($type === 'tracking_no') {
+/**
+ * Live search: match every field that is shown in the Find list for this doc type.
+ * $type is kept for backward compatibility; empty term still returns recent docs.
+ */
+if ($searchTerm !== '') {
+    $like = "%{$searchTerm}%";
+    $or = [];
+    $or[] = 'h.doc_no LIKE ?';
+    $params[] = $like;
+    $or[] = 'CONVERT(VARCHAR(10), h.doc_dt, 23) LIKE ?';
+    $params[] = $like;
+    $or[] = 'CONVERT(VARCHAR(10), h.doc_dt, 103) LIKE ?'; // dd/mm/yyyy
+    $params[] = $like;
+    $or[] = "ISNULL(h.narration, '') LIKE ?";
+    $params[] = $like;
+    $or[] = "ISNULL(h.$ref_col, '') LIKE ?";
+    $params[] = $like;
+
     if ($with_customer) {
-        // Find label "Customer" — match customer name / code; also keep tracking_no
-        $sql .= " AND (am.description LIKE ? OR h.ac_code LIKE ? OR h.$ref_col LIKE ?)";
-        $params[] = "%{$searchTerm}%";
-        $params[] = "%{$searchTerm}%";
-        $params[] = "%{$searchTerm}%";
-    } else {
-        $sql .= " AND h.$ref_col LIKE ?";
-        $params[] = "%{$searchTerm}%";
+        $or[] = 'ISNULL(am.description, \'\') LIKE ?';
+        $params[] = $like;
+        $or[] = 'ISNULL(h.ac_code, \'\') LIKE ?';
+        $params[] = $like;
     }
-} else if ($type === 'job_no') {
-    $job_detail_match = "EXISTS (SELECT 1 FROM $tbl_d d WHERE d.doc_no = h.doc_no AND d.company_code = h.company_code AND d.branch_code = h.branch_code AND d.job_no LIKE ?)";
     if ($job_col !== null) {
-        $sql .= " AND (h.$job_col LIKE ? OR $job_detail_match)";
-        $params[] = "%{$searchTerm}%";
-    } else {
-        $sql .= " AND $job_detail_match";
+        $or[] = "ISNULL(h.$job_col, '') LIKE ?";
+        $params[] = $like;
     }
-    $params[] = "%{$searchTerm}%";
+    if ($detail_has_job) {
+        $or[] = "EXISTS (SELECT 1 FROM $tbl_d d
+                  WHERE d.doc_no = h.doc_no AND d.company_code = h.company_code
+                    AND d.branch_code = h.branch_code AND d.job_no LIKE ?)";
+        $params[] = $like;
+    }
+    if ($detail_ref_col !== null) {
+        $or[] = "EXISTS (SELECT 1 FROM $tbl_d d
+                  WHERE d.doc_no = h.doc_no AND d.company_code = h.company_code
+                    AND d.branch_code = h.branch_code AND d.$detail_ref_col LIKE ?)";
+        $params[] = $like;
+    }
+
+    // Legacy type filters still narrow when only one type is requested with a term
+    // (toolbar now prefers a single all-fields call; keep type for older callers).
+    if ($type === 'tracking_no' && !$with_customer && $detail_ref_col === null) {
+        // already covered by ref_col LIKE
+    }
+
+    $sql .= ' AND (' . implode(' OR ', $or) . ')';
+} else {
+    // Empty search: still allow optional legacy type= filters (unused when term is blank)
+    if ($type === 'doc_no') {
+        $sql .= ' AND h.doc_no LIKE ?';
+        $params[] = '%';
+    }
 }
 
-$sql .= " ORDER BY h.doc_no DESC";
+$sql .= ' ORDER BY h.doc_no DESC';
 
 try {
     $stmt = $con->prepare($sql);
@@ -148,7 +234,7 @@ try {
     $json = json_encode($docs);
 
     if ($json === false) {
-        echo json_encode(["error" => "JSON Encoding Failed: " . json_last_error_msg()]);
+        echo json_encode(['error' => 'JSON Encoding Failed: ' . json_last_error_msg()]);
     } else {
         echo $json;
     }

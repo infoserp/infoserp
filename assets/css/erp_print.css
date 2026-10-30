@@ -811,8 +811,8 @@ html body.erp-print-page {
 .pf-inv2-head img { height: 38mm; }
 .pf-inv2-foot img { height: 22mm; }
 .pf-inv2-body {
-    /* Clear letter-footer (22mm) + pinned sign/stamp/company block (~28mm) */
-    padding: 2mm 10mm 52mm;
+    /* Keep body clear of the fixed 22mm letter-footer band */
+    padding: 2mm 10mm 24mm;
 }
 
 .pf-inv2-title-box {
@@ -884,23 +884,28 @@ html body.erp-print-page {
     margin-top: 2mm;
     border-top: 1px solid #000;
 }
-.pf-inv2-c-no    { width: 10mm; }
-.pf-inv2-c-desc  { width: auto; }
-.pf-inv2-c-qty   { width: 16mm; }
-.pf-inv2-c-price { width: 24mm; }
-.pf-inv2-c-amt   { width: 28mm; }
-.pf-inv2-c-bank  { width: auto; }
+.pf-inv2-c-no      { width: 7mm; }
+.pf-inv2-c-desc    { width: auto; }
+.pf-inv2-c-qty     { width: 12mm; }
+.pf-inv2-c-rate    { width: 18mm; }
+.pf-inv2-c-taxable { width: 24mm; }
+.pf-inv2-c-vpct    { width: 12mm; }
+.pf-inv2-c-vat     { width: 20mm; }
+.pf-inv2-c-net     { width: 22mm; }
 .pf-inv2-items th {
     height: 6.5mm;
-    padding: 0 1.2mm;
-    font-size: 8.5pt;
+    padding: 0 .6mm;
+    font-size: 7pt;
     font-weight: bold;
     background: #fff;
     border: 1px solid #000;
+    white-space: normal;
+    line-height: 1.15;
 }
 .pf-inv2-items td {
     height: 4.6mm;
-    padding: .6mm 1.2mm;
+    padding: .5mm .6mm;
+    font-size: 7.5pt;
     vertical-align: top;
     border-left: 1px solid #000;
     border-right: 1px solid #000;
@@ -921,7 +926,7 @@ html body.erp-print-page {
     color: #475569;
 }
 
-/* Bank + totals: Price/Amount column widths match the item table above */
+/* Bank + totals share the items table col widths (labels = Vat%+Vat Amt, values = Net) */
 .pf-inv2-bottom {
     width: 100%;
     margin-top: 0;
@@ -997,12 +1002,10 @@ html body.erp-print-page {
     border-top: none;
 }
 
-/* Pin sign/stamp/company just above the letter-footer band (no empty gap under company name) */
+/* Sign + stamp flow under table/breakup (not fixed to letter-footer) */
 .pf-inv2-sign-block {
-    position: absolute;
-    left: 10mm;
-    right: 10mm;
-    bottom: 23mm;
+    margin-top: 6mm;
+    margin-bottom: 2mm;
     font-size: 9pt;
 }
 .pf-inv2-sign-media {
@@ -1015,7 +1018,7 @@ html body.erp-print-page {
     max-width: 42mm;
     height: auto;
     width: auto;
-    margin-right: 10mm;
+    margin-right: 8mm;
     vertical-align: middle;
 }
 .pf-inv2-stamp {

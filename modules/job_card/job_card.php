@@ -118,6 +118,7 @@ $is_view_mode    = ($doc_no !== '');
 $close_url       = erp_iframe_url('dashboard');
 $save_label      = 'Save Job Card';
 $search_doc_url  = erp_iframe_url('search_document?doc_code=' . urlencode($doc_code));
+$search_ref_label = 'Quotation No';
 $selected_doc_type = $doc_type;
 
 $user_allow_edit = 'Y';

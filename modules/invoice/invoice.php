@@ -135,6 +135,7 @@ $close_url       = erp_iframe_url('dashboard');
 $save_label      = 'Save Invoice';
 // Pass doc_code to search_document.php so it can search the right table
 $search_doc_url  = erp_iframe_url('search_document?doc_code=' . urlencode($doc_code));
+$search_ref_label = 'Tracking No';
 $selected_doc_type = $doc_type;
 
 // Check if the logged-in user is allowed to edit / delete documents

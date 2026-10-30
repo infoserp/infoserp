@@ -158,7 +158,7 @@ $tb_close_attr     = htmlspecialchars($close_url, ENT_QUOTES, 'UTF-8');
             <div class="erp-search-input">
                 <i class="fa fa-search"></i>
                 <input type="text" id="erpDocSearchInput" autocomplete="off"
-                       placeholder="Search by Doc No, <?php echo htmlspecialchars($search_ref_label, ENT_QUOTES, 'UTF-8'); ?> or Job No"
+                       placeholder="Search any field shown in the list…"
                        oninput="erpSearchDocs(this.value)"
                        onkeydown="if (event.key === 'Enter') { event.preventDefault(); erpSearchDocsNow(); }">
             </div>
@@ -311,45 +311,38 @@ function erpSearchDocsNow() {
     erpRunDocSearch(document.getElementById('erpDocSearchInput').value);
 }
 
-// One box for every field: search_document.php is asked once per search type
-// (Doc No, reference, Job No) and the matches are merged by doc no.
+// One live-search call: search_document.php matches every field shown in the list.
 function erpRunDocSearch(query) {
     var seq = ++_erpDocSearchSeq;
     var term = String(query || '').trim();
-    var types = term === '' ? ['doc_no'] : ['doc_no', 'tracking_no', 'job_no'];
     document.getElementById('erpFindCount').textContent = '';
     erpFindState('Searching...');
 
-    Promise.all(types.map(function (type) {
-        var url = window.ERP_SEARCH_URL
-            + (window.ERP_SEARCH_URL.indexOf('?') >= 0 ? '&' : '?')
-            + 'term='      + encodeURIComponent(term)
-            + '&type='     + encodeURIComponent(type)
-            + '&doc_type=' + encodeURIComponent(window.ERP_DOC_TYPE);
-        return fetch(url)
-            .then(function (r) { return r.json(); })
-            .then(function (data) { return Array.isArray(data) ? data : null; })
-            .catch(function (err) { console.error('erpSearchDocs error:', err); return null; });
-    })).then(function (results) {
-        if (seq !== _erpDocSearchSeq) return;
-        if (results.every(function (r) { return r === null; })) {
-            erpFindState('Could not load documents. Please try again.', true);
-            return;
-        }
-        var byNo = {};
-        var docs = [];
-        results.forEach(function (list) {
-            (list || []).forEach(function (doc) {
-                if (!doc || doc.error || byNo[doc.doc_no]) return;
-                byNo[doc.doc_no] = true;
-                docs.push(doc);
+    var url = window.ERP_SEARCH_URL
+        + (window.ERP_SEARCH_URL.indexOf('?') >= 0 ? '&' : '?')
+        + 'term='      + encodeURIComponent(term)
+        + '&type=doc_no'
+        + '&doc_type=' + encodeURIComponent(window.ERP_DOC_TYPE);
+
+    fetch(url)
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (seq !== _erpDocSearchSeq) return;
+            if (data && data.error) {
+                erpFindState('Could not load documents. Please try again.', true);
+                return;
+            }
+            var docs = Array.isArray(data) ? data : [];
+            docs.sort(function (a, b) {
+                return String(b.doc_no || '').localeCompare(String(a.doc_no || ''), undefined, { numeric: true });
             });
+            erpRenderDocSearch(docs);
+        })
+        .catch(function (err) {
+            console.error('erpSearchDocs error:', err);
+            if (seq !== _erpDocSearchSeq) return;
+            erpFindState('Could not load documents. Please try again.', true);
         });
-        docs.sort(function (a, b) {
-            return String(b.doc_no).localeCompare(String(a.doc_no), undefined, { numeric: true });
-        });
-        erpRenderDocSearch(docs);
-    });
 }
 
 function erpRenderDocSearch(docs) {
@@ -359,18 +352,29 @@ function erpRenderDocSearch(docs) {
         return;
     }
     var docName = erpFindDocName();
+    var isJobCard = /job\s*card/i.test(docName);
     document.getElementById('erpDocSearchResults').innerHTML = docs.map(function (doc) {
         var dn = String(doc.doc_no || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-        var sub = [docName, erpFindDate(doc.doc_dt)].filter(Boolean).join(' \u00b7 ');
+        var title = doc.doc_no || '';
+        var sub;
         var extra = [];
-        if (doc.customer) extra.push('Customer: ' + doc.customer);
-        if (doc.tracking_no) extra.push(window.ERP_FIND_REF_LABEL + ': ' + doc.tracking_no);
-        if (doc.job_no) extra.push('Job No: ' + doc.job_no);
-        if (doc.narration) extra.push(doc.narration);
+        if (isJobCard) {
+            // Job No (title), Job date, Customer name, Quotation No
+            sub = ['Job date: ' + erpFindDate(doc.doc_dt)].filter(Boolean).join(' \u00b7 ');
+            if (doc.customer) extra.push('Customer: ' + doc.customer);
+            if (doc.tracking_no) extra.push('Quotation No: ' + doc.tracking_no);
+            if (doc.narration) extra.push(doc.narration);
+        } else {
+            sub = [docName, erpFindDate(doc.doc_dt)].filter(Boolean).join(' \u00b7 ');
+            if (doc.customer) extra.push('Customer: ' + doc.customer);
+            if (doc.job_no) extra.push('Job No: ' + doc.job_no);
+            if (doc.tracking_no) extra.push((window.ERP_FIND_REF_LABEL || 'Ref') + ': ' + doc.tracking_no);
+            if (doc.narration) extra.push(doc.narration);
+        }
         return '<div class="erp-search-row">'
             +   '<span class="erp-search-ico"><i class="fa fa-file-text-o"></i></span>'
             +   '<div class="erp-search-main">'
-            +     '<div class="erp-search-name">' + erpFindEsc(doc.doc_no) + '</div>'
+            +     '<div class="erp-search-name">' + erpFindEsc(title) + '</div>'
             +     '<div class="erp-search-sub">' + erpFindEsc(sub) + '</div>'
             +     (extra.length ? '<div class="erp-search-extra" title="' + erpFindEsc(extra.join(' \u00b7 ')) + '">' + erpFindEsc(extra.join(' \u00b7 ')) + '</div>' : '')
             +   '</div>'

@@ -48,14 +48,24 @@ $stmt_d = $con->prepare(
 $stmt_d->execute([$doc_no, $company_code, $branch_code]);
 
 $inv_rows = [];
-$inv_tot = ['amount' => 0.0, 'vat' => 0.0];
+$inv_tot = ['taxable' => 0.0, 'vat' => 0.0, 'net' => 0.0];
 $inv_vat_pcts = [];
 while ($d = $stmt_d->fetch(PDO::FETCH_ASSOC)) {
     $qty      = (float) $d['trans_qty'];
     $rate     = (float) $d['trans_rate'];
     $discount = (float) $d['discount_amount'];
-    $amount   = round($qty * $rate - $discount, 2);
-    $vat      = (float) $d['tax1_amount'];
+    // Taxable Amount = qty × rate − discount (same as detail screen)
+    $taxable  = round($qty * $rate - $discount, 2);
+    if ($taxable < 0) {
+        $taxable = 0.0;
+    }
+    $vat_pct  = (float) ($d['tax1_percent'] ?? 0);
+    $vat_amt  = (float) ($d['tax1_amount'] ?? 0);
+    // Prefer stored tax1_amount; if missing, derive from taxable × vat%
+    if ($vat_amt == 0.0 && $vat_pct > 0 && $taxable > 0) {
+        $vat_amt = round(($taxable * $vat_pct) / 100, 2);
+    }
+    $net = round($taxable + $vat_amt, 2);
 
     $desc = trim((string) $d['item_description']);
     $note = trim((string) ($d['narration'] ?? ''));
@@ -63,27 +73,37 @@ while ($d = $stmt_d->fetch(PDO::FETCH_ASSOC)) {
         $note = trim((string) ($d['remark'] ?? ''));
     }
 
-    $inv_tot['amount'] += $amount;
-    $inv_tot['vat']    += $vat;
-    $inv_vat_pcts[erp_print_qty($d['tax1_percent'])] = true;
+    $inv_tot['taxable'] += $taxable;
+    $inv_tot['vat']     += $vat_amt;
+    $inv_tot['net']     += $net;
+    $inv_vat_pcts[erp_print_qty($vat_pct)] = true;
 
     $inv_rows[] = [
-        'desc'   => $desc,
-        'note'   => $note,
-        'qty'    => $qty,
-        'rate'   => $rate,
-        'amount' => $amount,
+        'desc'    => $desc,
+        'note'    => $note,
+        'qty'     => $qty,
+        'rate'    => $rate,
+        'taxable' => $taxable,
+        'vat_pct' => $vat_pct,
+        'vat_amt' => $vat_amt,
+        'net'     => $net,
+        // paginator uses amount field name historically for wrap sizing only
+        'amount'  => $taxable,
     ];
 }
 
 $header_vat = (float) ($inv_h['tax1_amount'] ?? 0);
 if ($header_vat > 0 && $inv_tot['vat'] <= 0) {
     $inv_tot['vat'] = $header_vat;
+    $inv_tot['net'] = round($inv_tot['taxable'] + $inv_tot['vat'], 2);
 }
 
-$inv_sub_total = round($inv_tot['amount'], 2);
+$inv_taxable   = round($inv_tot['taxable'], 2);
 $inv_vat       = round($inv_tot['vat'], 2);
-$inv_net_total = round($inv_sub_total + $inv_vat, 2);
+$inv_net_total = round($inv_tot['net'], 2);
+if ($inv_net_total <= 0) {
+    $inv_net_total = round($inv_taxable + $inv_vat, 2);
+}
 
 if (count($inv_vat_pcts) === 1) {
     $inv_vat_label = 'VAT ' . array_key_first($inv_vat_pcts) . '%';
@@ -212,17 +232,17 @@ if ($inv_salesman_code !== '') {
     $inv_sign_img = erp_print_image_data_uri($sm['signature_file'] ?? '');
 }
 
-// Pagination: customer/info boxes only on page 1; reserve last-page room for
-// bank + totals + amount-in-words + signature under the letterhead bands.
+// Pagination: customer/info boxes only on page 1; narrower desc column with new fields.
+// Sign/stamp/company flow under the table (not pinned to letter-footer).
 $inv_row_mm   = 5.5;
 $inv_wrap_mm  = 4;
-$inv_wrap_chr = 58;
-$inv_area_mm  = 160; // continuation (title only)
-$inv_first_area_mm = 115; // page 1 also has info boxes
-// bank(~28) + words(~8) + pageno(~5) + sign/stamp(~28) + company(~8) + pad
-$inv_footer_reserve = 95.0;
-$inv_last_area_mm = max(24.0, min($inv_area_mm, 210.0 - $inv_footer_reserve));
-$inv_first_last_area_mm = max(18.0, min($inv_first_area_mm, 175.0 - $inv_footer_reserve));
+$inv_wrap_chr = 32;
+$inv_area_mm  = 155;
+$inv_first_area_mm = 110;
+// bank+totals(~32) + words(~8) + breakup(~12) + sign(~32) + pad
+$inv_footer_reserve = 100.0;
+$inv_last_area_mm = max(24.0, min($inv_area_mm, 205.0 - $inv_footer_reserve));
+$inv_first_last_area_mm = max(18.0, min($inv_first_area_mm, 170.0 - $inv_footer_reserve));
 
 list($inv_pages, $inv_page_mm) = erp_print_paginate_detail_rows($inv_rows, [
     'area_mm'            => $inv_area_mm,
@@ -317,16 +337,22 @@ foreach ($inv_pages as $page_index => $page_rows) {
                 <col class="pf-inv2-c-no">
                 <col class="pf-inv2-c-desc">
                 <col class="pf-inv2-c-qty">
-                <col class="pf-inv2-c-price">
-                <col class="pf-inv2-c-amt">
+                <col class="pf-inv2-c-rate">
+                <col class="pf-inv2-c-taxable">
+                <col class="pf-inv2-c-vpct">
+                <col class="pf-inv2-c-vat">
+                <col class="pf-inv2-c-net">
             </colgroup>
             <thead>
                 <tr>
                     <th>No</th>
                     <th>Description</th>
                     <th>Qty</th>
-                    <th>Price</th>
-                    <th>Amount(<?php echo htmlspecialchars($inv_ccy_hdr); ?>)</th>
+                    <th>Rate</th>
+                    <th>Taxable Amount</th>
+                    <th>Vat %</th>
+                    <th>Vat Amount</th>
+                    <th>Net Amount</th>
                 </tr>
             </thead>
             <tbody>
@@ -348,7 +374,10 @@ foreach ($inv_pages as $page_index => $page_rows) {
                     <td class="wrap"><?php echo $desc_html; ?></td>
                     <td class="num"><?php echo $show ? erp_print_qty($r['qty']) : ''; ?></td>
                     <td class="num"><?php echo $show ? erp_print_amount($r['rate']) : ''; ?></td>
-                    <td class="num"><?php echo $show ? erp_print_amount($r['amount']) : ''; ?></td>
+                    <td class="num"><?php echo $show ? erp_print_amount($r['taxable']) : ''; ?></td>
+                    <td class="center"><?php echo $show ? erp_print_qty($r['vat_pct']) : ''; ?></td>
+                    <td class="num"><?php echo $show ? erp_print_amount($r['vat_amt']) : ''; ?></td>
+                    <td class="num"><?php echo $show ? erp_print_amount($r['net']) : ''; ?></td>
                 </tr>
                 <?php } ?>
             </tbody>
@@ -356,15 +385,20 @@ foreach ($inv_pages as $page_index => $page_rows) {
         <?php } ?>
 
         <?php if ($is_last) { ?>
-        <!-- Totals width = Price + Amount columns so the grid lines up under the item table -->
+        <!-- Same column widths as items table so totals lines match Vat Amount / Net Amount -->
         <table class="pf-inv2-bottom">
             <colgroup>
-                <col class="pf-inv2-c-bank">
-                <col class="pf-inv2-c-price">
-                <col class="pf-inv2-c-amt">
+                <col class="pf-inv2-c-no">
+                <col class="pf-inv2-c-desc">
+                <col class="pf-inv2-c-qty">
+                <col class="pf-inv2-c-rate">
+                <col class="pf-inv2-c-taxable">
+                <col class="pf-inv2-c-vpct">
+                <col class="pf-inv2-c-vat">
+                <col class="pf-inv2-c-net">
             </colgroup>
             <tr>
-                <td class="pf-inv2-bank">
+                <td class="pf-inv2-bank" colspan="5">
                     <div class="pf-inv2-bank-title">BANK ACCOUNT :</div>
                     <table class="pf-inv2-bank-kv">
                         <?php foreach ($inv_bank_lines as $bl) { ?>
@@ -376,13 +410,13 @@ foreach ($inv_pages as $page_index => $page_rows) {
                         <?php } ?>
                     </table>
                 </td>
-                <td class="pf-inv2-sum-k">
-                    <div class="pf-inv2-sum-line">Sub Total</div>
+                <td class="pf-inv2-sum-k" colspan="2">
+                    <div class="pf-inv2-sum-line">Taxable Amount</div>
                     <div class="pf-inv2-sum-line"><?php echo htmlspecialchars($inv_vat_label); ?></div>
-                    <div class="pf-inv2-sum-line pf-inv2-net">Net Total</div>
+                    <div class="pf-inv2-sum-line pf-inv2-net">Net Amount</div>
                 </td>
                 <td class="pf-inv2-sum-v">
-                    <div class="pf-inv2-sum-line"><?php echo erp_print_amount($inv_sub_total); ?></div>
+                    <div class="pf-inv2-sum-line"><?php echo erp_print_amount($inv_taxable); ?></div>
                     <div class="pf-inv2-sum-line"><?php echo erp_print_amount($inv_vat); ?></div>
                     <div class="pf-inv2-sum-line pf-inv2-net"><?php echo erp_print_amount($inv_net_total); ?></div>
                 </td>
@@ -390,26 +424,24 @@ foreach ($inv_pages as $page_index => $page_rows) {
         </table>
 
         <div class="pf-inv2-words"><?php echo htmlspecialchars($inv_words); ?></div>
+
+        <div class="pf-inv2-sign-block">
+            <div class="pf-inv2-sign-media">
+                <?php if ($inv_sign_img !== '') { ?>
+                <img class="pf-inv2-sign-img" src="<?php echo $inv_sign_img; ?>" alt="">
+                <?php } ?>
+                <?php if ($inv_stamp_img !== '') { ?>
+                <img class="pf-inv2-stamp" src="<?php echo $inv_stamp_img; ?>" alt="">
+                <?php } ?>
+            </div>
+            <div class="pf-inv2-for">For <?php echo htmlspecialchars($inv_company_name !== '' ? $inv_company_name : ($company['name'] ?? '')); ?></div>
+        </div>
         <?php } else { ?>
         <div class="pf-inv2-cont">Continued on next page…</div>
         <?php } ?>
 
         <div class="pf-pageno">Page <?php echo $page_index + 1; ?> of <?php echo $inv_page_count; ?></div>
     </div>
-
-    <?php if ($is_last) { ?>
-    <div class="pf-inv2-sign-block">
-        <div class="pf-inv2-sign-media">
-            <?php if ($inv_sign_img !== '') { ?>
-            <img class="pf-inv2-sign-img" src="<?php echo $inv_sign_img; ?>" alt="">
-            <?php } ?>
-            <?php if ($inv_stamp_img !== '') { ?>
-            <img class="pf-inv2-stamp" src="<?php echo $inv_stamp_img; ?>" alt="">
-            <?php } ?>
-        </div>
-        <div class="pf-inv2-for">For <?php echo htmlspecialchars($inv_company_name !== '' ? $inv_company_name : ($company['name'] ?? '')); ?></div>
-    </div>
-    <?php } ?>
 
     <div class="pf-inv2-foot"><?php if ($inv_footer_img !== '') { ?><img src="<?php echo $inv_footer_img; ?>" alt=""><?php } ?></div>
 </div>

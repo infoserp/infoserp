@@ -4,6 +4,8 @@
  * connect to SQL with the service account from config.local.php.
  * POST handling runs before any HTML so erp_redirect() can send Location headers.
  */
+require_once __DIR__ . '/includes/erp_session.php';
+erp_session_configure_ini();
 if (session_status() !== PHP_SESSION_ACTIVE) {
     session_start();
 }
@@ -70,6 +72,7 @@ if (isset($_POST['username'])) {
                 $_SESSION['user_type'] = strtoupper(trim((string) $row['user_type']));
                 $_SESSION['user_name'] = trim((string) ($row['user_name'] ?? $username));
                 $_SESSION['allow_allbranch'] = strtoupper(trim((string) ($row['allow_allbranch'] ?? 'N'))) === 'Y' ? 'Y' : 'N';
+                erp_session_mark_login();
 
                 if (!empty($erpConfig['rehash_login_password_on_login'])
                     && erp_password_needs_rehash($row['login_password'] ?? '')) {
@@ -110,6 +113,9 @@ if (isset($_POST['username'])) {
 <script src="https://cdn.tailwindcss.com"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link href="assets/css/login.css?v=20261015b" rel="stylesheet">
+<script>
+try { localStorage.removeItem('erp_last_activity'); } catch (e) {}
+</script>
 </head>
 <body class="login-body">
 <?php
