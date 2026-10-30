@@ -76,6 +76,223 @@ if (!function_exists('erp_print_pages')) {
     }
 }
 
+if (!function_exists('erp_print_wrap_lines')) {
+    /** Split text into display lines using newlines + word-wrap. */
+    function erp_print_wrap_lines($text, $wrap_chr)
+    {
+        $wrap_chr = max(8, (int) $wrap_chr);
+        $out = [];
+        foreach (preg_split("/\r\n|\r|\n/", (string) $text) as $para) {
+            $wrapped = wordwrap($para !== '' ? $para : ' ', $wrap_chr, "\n", true);
+            foreach (explode("\n", $wrapped) as $line) {
+                $out[] = $line;
+            }
+        }
+        return $out ?: [''];
+    }
+}
+
+if (!function_exists('erp_print_paginate_detail_rows')) {
+    /**
+     * Paginate detail rows so long description/remark text can span multiple A4 pages.
+     * Even a single oversized line is split; the last page keeps room for totals/terms/sign.
+     *
+     * Options: area_mm, first_area_mm, last_area_mm, first_last_area_mm, row_mm, wrap_mm, wrap_chr
+     * first_area_mm = page 1 capacity when header boxes are shown.
+     * last_area_mm = last-page capacity when boxes are omitted (continuation last page).
+     * first_last_area_mm = capacity when page 1 is also the last page (boxes + footer).
+     *
+     * @return array{0: list<list<array>>, 1: list<float>} pages and per-page mm
+     */
+    function erp_print_paginate_detail_rows(array $rows, array $opt)
+    {
+        $area       = (float) ($opt['area_mm'] ?? 100);
+        $first_area = (float) ($opt['first_area_mm'] ?? $area);
+        $last_area  = (float) ($opt['last_area_mm'] ?? 55);
+        $first_last = (float) ($opt['first_last_area_mm'] ?? min($first_area, $last_area));
+        $row_mm     = (float) ($opt['row_mm'] ?? 5.5);
+        $wrap_mm    = (float) ($opt['wrap_mm'] ?? 4);
+        $wrap_chr   = (int) ($opt['wrap_chr'] ?? 55);
+        if ($area < $row_mm) {
+            $area = $row_mm;
+        }
+        if ($first_area < $row_mm) {
+            $first_area = $row_mm;
+        }
+        if ($first_area > $area) {
+            $first_area = $area;
+        }
+        if ($last_area > $area) {
+            $last_area = $area;
+        }
+        if ($last_area < $row_mm) {
+            $last_area = $row_mm;
+        }
+        if ($first_last > $first_area) {
+            $first_last = $first_area;
+        }
+        if ($first_last < $row_mm) {
+            $first_last = $row_mm;
+        }
+
+        $max_lines_for = function ($max_mm) use ($row_mm, $wrap_mm) {
+            if ($max_mm <= $row_mm) {
+                return 1;
+            }
+            return 1 + (int) floor(($max_mm - $row_mm) / max(0.1, $wrap_mm));
+        };
+        $mm_for_lines = function ($n) use ($row_mm, $wrap_mm) {
+            $n = max(1, (int) $n);
+            return $row_mm + ($n - 1) * $wrap_mm;
+        };
+        $page_cap = function ($page_index) use ($first_area, $area) {
+            return $page_index === 0 ? $first_area : $area;
+        };
+
+        // Expand each source row into fragments that each fit in the largest page area
+        $fragments = [];
+        foreach ($rows as $row) {
+            $desc_lines = erp_print_wrap_lines($row['desc'] ?? '', $wrap_chr);
+            $note_lines = [];
+            if (trim((string) ($row['note'] ?? '')) !== '') {
+                $note_lines = erp_print_wrap_lines($row['note'], $wrap_chr);
+            }
+            $all = [];
+            foreach ($desc_lines as $s) {
+                $all[] = ['k' => 'd', 's' => $s];
+            }
+            foreach ($note_lines as $s) {
+                $all[] = ['k' => 'n', 's' => $s];
+            }
+            if (!$all) {
+                $all[] = ['k' => 'd', 's' => ''];
+            }
+
+            $max_lines = $max_lines_for($area);
+            $offset = 0;
+            $first = true;
+            while ($offset < count($all)) {
+                $slice = array_slice($all, $offset, $max_lines);
+                $offset += count($slice);
+                $dparts = [];
+                $nparts = [];
+                foreach ($slice as $piece) {
+                    if ($piece['k'] === 'd') {
+                        $dparts[] = $piece['s'];
+                    } else {
+                        $nparts[] = $piece['s'];
+                    }
+                }
+                $frag = $row;
+                $frag['desc'] = implode("\n", $dparts);
+                $frag['note'] = implode("\n", $nparts);
+                $frag['show_values'] = $first;
+                $frag['continued'] = !$first;
+                $frag['mm'] = $mm_for_lines(count($slice));
+                $fragments[] = $frag;
+                $first = false;
+            }
+        }
+
+        $lines_of = function (array $frag) use ($wrap_chr) {
+            $desc_lines = erp_print_wrap_lines($frag['desc'] ?? '', $wrap_chr);
+            $note_lines = ($frag['note'] ?? '') !== '' ? erp_print_wrap_lines($frag['note'], $wrap_chr) : [];
+            $all = [];
+            foreach ($desc_lines as $s) {
+                $all[] = ['k' => 'd', 's' => $s];
+            }
+            foreach ($note_lines as $s) {
+                $all[] = ['k' => 'n', 's' => $s];
+            }
+            return $all ?: [['k' => 'd', 's' => '']];
+        };
+        $frag_from_slice = function (array $base, array $slice, $show, $continued) use ($mm_for_lines) {
+            $dparts = [];
+            $nparts = [];
+            foreach ($slice as $piece) {
+                if ($piece['k'] === 'd') {
+                    $dparts[] = $piece['s'];
+                } else {
+                    $nparts[] = $piece['s'];
+                }
+            }
+            $out = $base;
+            $out['desc'] = implode("\n", $dparts);
+            $out['note'] = implode("\n", $nparts);
+            $out['show_values'] = $show;
+            $out['continued'] = $continued;
+            $out['mm'] = $mm_for_lines(count($slice));
+            return $out;
+        };
+
+        // Pack fragments; page 1 uses first_area (header boxes), later pages use area
+        $pages = [[]];
+        $page_mm = [0.0];
+        foreach ($fragments as $frag) {
+            $queue = [$frag];
+            while ($queue) {
+                $cur = array_shift($queue);
+                $p = count($pages) - 1;
+                $cap = $page_cap($p);
+                $remaining = $cap - $page_mm[$p];
+
+                if ($pages[$p] && $cur['mm'] > $remaining + 0.01) {
+                    $pages[] = [];
+                    $page_mm[] = 0.0;
+                    array_unshift($queue, $cur);
+                    continue;
+                }
+
+                if ($cur['mm'] > $cap + 0.01) {
+                    // Split to fit this page's smaller first_area (or any tight cap)
+                    $all = $lines_of($cur);
+                    $keep = max(1, $max_lines_for($cap));
+                    $head = array_slice($all, 0, $keep);
+                    $tail = array_slice($all, $keep);
+                    $pages[$p][] = $frag_from_slice($cur, $head, !empty($cur['show_values']), !empty($cur['continued']));
+                    $page_mm[$p] += $pages[$p][count($pages[$p]) - 1]['mm'];
+                    if ($tail) {
+                        $queue[] = $frag_from_slice($cur, $tail, false, true);
+                    }
+                    continue;
+                }
+
+                $pages[$p][] = $cur;
+                $page_mm[$p] += $cur['mm'];
+            }
+        }
+
+        // Ensure last page leaves room for totals / terms / signature.
+        // Page 1-as-last uses first_last (boxes + footer); later last pages use last_area.
+        $guard = 0;
+        while ($guard++ < 500) {
+            $p = count($pages) - 1;
+            $need = ($p === 0) ? $first_last : $last_area;
+            if ($page_mm[$p] <= $need + 0.01) {
+                break;
+            }
+            if (count($pages[$p]) <= 1) {
+                $pages[] = [];
+                $page_mm[] = 0.0;
+                break;
+            }
+            $moved = array_pop($pages[$p]);
+            $page_mm[$p] -= $moved['mm'];
+            if ($page_mm[$p] < 0) {
+                $page_mm[$p] = 0;
+            }
+            $pages[] = [$moved];
+            $page_mm[] = $moved['mm'];
+        }
+
+        if (!$pages) {
+            $pages = [[]];
+            $page_mm = [0.0];
+        }
+        return [$pages, $page_mm];
+    }
+}
+
 if (!function_exists('erp_print_qty')) {
     function erp_print_qty($value)
     {
@@ -193,9 +410,21 @@ if (!function_exists('erp_print_pdf')) {
     {
         $autoload = dirname(__DIR__) . '/vendor/autoload.php';
         if (!is_file($autoload)) {
-            throw new RuntimeException('PDF library (vendor folder) is not installed on this server.');
+            throw new RuntimeException(
+                'PDF library missing: run "composer install" on the server (the vendor/ folder is not in git).'
+            );
         }
         require_once $autoload;
+
+        if (!class_exists('\\Dompdf\\Dompdf')) {
+            throw new RuntimeException('Dompdf is not available. Check that vendor/dompdf is installed.');
+        }
+        if (PHP_VERSION_ID < 70200) {
+            // Current Dompdf 3.x pulls sabberworm/php-css-parser which needs PHP 7.2+
+            throw new RuntimeException(
+                'PDF needs PHP 7.2 or newer (server is ' . PHP_VERSION . '). Use browser Print, or upgrade PHP.'
+            );
+        }
 
         $css  = (string) @file_get_contents(dirname(__DIR__) . '/assets/css/erp_print.css');
         $html = '<!DOCTYPE html><html><head><meta charset="utf-8"><style>' . $css . '</style></head>'
@@ -203,7 +432,8 @@ if (!function_exists('erp_print_pdf')) {
 
         $options = new \Dompdf\Options();
         $options->set('isRemoteEnabled', false);
-        $options->set('chroot', [dirname(__DIR__)]);
+        // Dompdf 2 used a string chroot; 3 accepts array — keep string for wider compatibility
+        $options->set('chroot', dirname(__DIR__));
         $options->set('defaultFont', 'Helvetica');
 
         $dompdf = new \Dompdf\Dompdf($options);

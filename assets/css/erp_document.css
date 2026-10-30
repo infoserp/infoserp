@@ -1334,6 +1334,15 @@ body.compact .doc-panel { padding: 10px 14px 12px; }
     color: var(--primary-hover);
     text-decoration: underline;
 }
+/* Sales Quotation: Remark More.. turns pale red when remark text is present */
+.detail-table#sqGrid button.detail-more.detail-more-has-remark,
+.detail-table button.detail-more.detail-more-has-remark {
+    color: #e57373;
+}
+.detail-table#sqGrid button.detail-more.detail-more-has-remark:hover,
+.detail-table button.detail-more.detail-more-has-remark:hover {
+    color: #ef5350;
+}
 
 /* More Data — solid action button in detail grid */
 .detail-table button.detail-more.detail-more-data {

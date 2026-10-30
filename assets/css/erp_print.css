@@ -283,7 +283,8 @@ html body.erp-print-page {
 .pf-inv-head img { height: 38mm; }
 .pf-inv-foot img { height: 22mm; }
 .pf-inv-body {
-    padding: 2mm 12mm 0;
+    /* Keep body clear of the fixed 22mm letter-footer band */
+    padding: 2mm 12mm 24mm;
 }
 
 .pf-inv-title {
@@ -399,6 +400,9 @@ html body.erp-print-page {
     border-left-color: #cbd5e1;
     border-right-color: #cbd5e1;
 }
+.pf-inv-items tbody tr:last-child td {
+    border-bottom: 1px solid #334155;
+}
 
 /* amount in words + VAT / Net Total */
 .pf-inv-sum {
@@ -510,7 +514,8 @@ html body.erp-print-page {
 .pf-sq-head img { height: 38mm; }
 .pf-sq-foot img { height: 22mm; }
 .pf-sq-body {
-    padding: 2mm 12mm 0;
+    /* Keep body clear of the fixed 22mm letter-footer band */
+    padding: 2mm 12mm 24mm;
 }
 
 .pf-sq-title {
@@ -575,14 +580,39 @@ html body.erp-print-page {
     width: 100%;
 }
 
+.pf-sq-sub {
+    margin: 3mm 0 0.8mm;
+    font-size: 9pt;
+    font-weight: bold;
+}
 .pf-sq-intro {
     margin: 3mm 0 2.5mm;
     font-size: 9pt;
 }
+.pf-sq-sub + .pf-sq-intro {
+    margin-top: 0.8mm;
+}
 
 .pf-items.pf-sq-items {
     margin-top: 0;
+    table-layout: fixed;
+    border-bottom: none;
 }
+/* Close the grid on every page (incl. continuation) so vertical column lines are capped */
+.pf-sq-items tbody tr:last-child td {
+    border-bottom: 1px solid #000;
+}
+.pf-sq-detail > .pf-items.pf-sq-items:first-child {
+    /* Continuation page: no intro above the grid */
+    margin-top: 2mm;
+}
+.pf-sq-c-no    { width: 8mm; }
+.pf-sq-c-desc  { width: auto; }
+.pf-sq-c-qty   { width: 14mm; }
+.pf-sq-c-unit  { width: 14mm; }
+.pf-sq-c-price { width: 24mm; }
+.pf-sq-c-amt   { width: 26mm; }
+.pf-sq-c-words { width: auto; }
 .pf-sq-items th {
     height: 6.5mm;
     padding: 0 1.2mm;
@@ -608,40 +638,47 @@ html body.erp-print-page {
     font-size: 8pt;
     line-height: 1.35;
 }
+.pf-sq-cont-label {
+    font-size: 8pt;
+    font-style: italic;
+    color: #475569;
+}
 
+/* Totals flush under Price + Amount; words in a bordered cell like the sample */
 .pf-sq-sum {
     width: 100%;
-    margin-top: 1.5mm;
+    margin-top: 0;
     border-collapse: collapse;
+    table-layout: fixed;
 }
 .pf-sq-sum td.pf-sq-words {
-    padding: 1mm 3mm 1mm 0;
+    padding: 2mm 2.5mm;
+    vertical-align: middle;
+    text-align: left;
+    font-size: 9pt;
+    font-weight: bold;
+    border: 1px solid #000;
+}
+.pf-sq-sum td.pf-sq-sum-k,
+.pf-sq-sum td.pf-sq-sum-v {
+    height: 6.5mm;
+    padding: 0 1.5mm;
     vertical-align: middle;
     font-size: 9pt;
     font-weight: bold;
-}
-.pf-sq-sum td.pf-sq-sum-panel {
-    width: 62mm;
-    vertical-align: top;
-}
-.pf-sq-sum-grid {
-    width: 100%;
-    border-collapse: collapse;
-}
-.pf-sq-sum-grid td {
-    padding: .7mm 1.5mm;
-    font-size: 9pt;
     border: 1px solid #000;
+    border-left: none;
 }
-.pf-sq-sum-grid td.pf-sq-sum-k {
-    width: 32mm;
-    font-weight: bold;
-}
-.pf-sq-sum-grid td.pf-sq-sum-v {
+.pf-sq-sum td.pf-sq-sum-k {
     text-align: right;
-    font-weight: bold;
+    white-space: nowrap;
 }
-.pf-sq-sum-grid tr.pf-sq-net td {
+.pf-sq-sum td.pf-sq-sum-v {
+    text-align: right;
+    border-left: 1px solid #000;
+}
+.pf-sq-sum tr.pf-sq-net td.pf-sq-sum-k,
+.pf-sq-sum tr.pf-sq-net td.pf-sq-sum-v {
     font-size: 10pt;
 }
 
@@ -689,8 +726,36 @@ html body.erp-print-page {
 .pf-sq-for {
     font-weight: bold;
 }
+/* Signature + circular stamp on one row under the company name (stamp stays near the sign) */
+.pf-sq-sign-row {
+    width: auto;
+    margin: 1.5mm 0 1.5mm;
+    border-collapse: collapse;
+}
+.pf-sq-sign-row td {
+    padding: 0;
+    vertical-align: middle;
+}
+.pf-sq-sign-img-cell {
+    padding-right: 6mm !important;
+}
 .pf-sq-sign-space {
     height: 14mm;
+    width: 40mm;
+}
+.pf-sq-sign-img {
+    display: block;
+    max-height: 18mm;
+    max-width: 50mm;
+    height: auto;
+    width: auto;
+}
+.pf-sq-stamp {
+    display: block;
+    width: 28mm;
+    height: 28mm;
+    border-radius: 50%;
+    object-fit: cover;
 }
 .pf-sq-sign-name {
     font-weight: bold;
@@ -709,7 +774,6 @@ html body.erp-print-page {
 }
 .pf-sq-body .pf-pageno {
     margin-top: 2mm;
-    margin-bottom: 24mm;
     font-size: 8pt;
     color: #475569;
 }
@@ -747,7 +811,8 @@ html body.erp-print-page {
 .pf-inv2-head img { height: 38mm; }
 .pf-inv2-foot img { height: 22mm; }
 .pf-inv2-body {
-    padding: 2mm 10mm 0;
+    /* Clear letter-footer (22mm) + pinned sign/stamp/company block (~28mm) */
+    padding: 2mm 10mm 52mm;
 }
 
 .pf-inv2-title-box {
@@ -810,6 +875,15 @@ html body.erp-print-page {
     border-top: none;
     border-bottom: none;
 }
+/* Close the grid on every page (incl. continuation) so vertical column lines are capped */
+.pf-inv2-items tbody tr:last-child td {
+    border-bottom: 1px solid #000;
+}
+/* Continuation pages have no info header box above the grid */
+.pf-items.pf-inv2-items.pf-inv2-items-cont {
+    margin-top: 2mm;
+    border-top: 1px solid #000;
+}
 .pf-inv2-c-no    { width: 10mm; }
 .pf-inv2-c-desc  { width: auto; }
 .pf-inv2-c-qty   { width: 16mm; }
@@ -839,6 +913,12 @@ html body.erp-print-page {
     margin-top: .6mm;
     font-size: 8pt;
     line-height: 1.3;
+}
+.pf-inv2-cont-label,
+.pf-inv-cont-label {
+    font-size: 8pt;
+    font-style: italic;
+    color: #475569;
 }
 
 /* Bank + totals: Price/Amount column widths match the item table above */
@@ -917,12 +997,39 @@ html body.erp-print-page {
     border-top: none;
 }
 
-.pf-inv2-sign {
-    margin-top: 8mm;
+/* Pin sign/stamp/company just above the letter-footer band (no empty gap under company name) */
+.pf-inv2-sign-block {
+    position: absolute;
+    left: 10mm;
+    right: 10mm;
+    bottom: 23mm;
     font-size: 9pt;
+}
+.pf-inv2-sign-media {
+    margin: 0 0 2mm;
+    line-height: 0;
+}
+.pf-inv2-sign-img {
+    display: inline-block;
+    max-height: 15mm;
+    max-width: 42mm;
+    height: auto;
+    width: auto;
+    margin-right: 10mm;
+    vertical-align: middle;
+}
+.pf-inv2-stamp {
+    display: inline-block;
+    width: 24mm;
+    height: 24mm;
+    border-radius: 50%;
+    object-fit: cover;
+    vertical-align: middle;
 }
 .pf-inv2-for {
     font-weight: bold;
+    line-height: 1.3;
+    font-size: 9pt;
 }
 
 .pf-inv2-cont {
@@ -932,8 +1039,7 @@ html body.erp-print-page {
     color: #334155;
 }
 .pf-inv2-body .pf-pageno {
-    margin-top: 2mm;
-    margin-bottom: 24mm;
+    margin-top: 1.5mm;
     font-size: 8pt;
     color: #475569;
 }

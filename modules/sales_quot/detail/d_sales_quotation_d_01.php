@@ -281,7 +281,7 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
     </td>
     <td data-label="Remark">
         <input type="hidden" name="item_remark[]" value="<?php echo htmlspecialchars($_dl['remark'] ?? ''); ?>">
-        <button type="button" class="detail-more" tabindex="-1" onclick="sqOpenRemarkMore(this)">More..</button>
+        <button type="button" class="detail-more<?php echo trim((string) ($_dl['remark'] ?? '')) !== '' ? ' detail-more-has-remark' : ''; ?>" tabindex="-1" onclick="sqOpenRemarkMore(this)">More..</button>
     </td>
     <td data-label="Qty"><input type="number" class="form-control form-control-sm detail-input" name="qty[]" value="<?php echo htmlspecialchars((string) $_dl_qty); ?>" <?php echo $_dl_ro; ?> style="text-align:right;"></td>
     <td data-label="Unit" class="sq-unit-col"><select class="form-control form-control-sm detail-input text-center" name="unit[]" <?php echo $_detail_view ? 'disabled' : ''; ?>><?php echo sq_unit_options_html($unit_list, $_dl_unit); ?></select></td>
@@ -659,6 +659,16 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
     function sqSaveRemarkMore() {
         if (_sqRemarkInput && !document.getElementById('sqRemarkText').readOnly) {
             _sqRemarkInput.value = document.getElementById('sqRemarkText').value;
+            var btn = _sqRemarkInput.parentNode
+                ? _sqRemarkInput.parentNode.querySelector('button.detail-more')
+                : null;
+            if (btn) {
+                if (_sqRemarkInput.value.trim() !== '') {
+                    btn.classList.add('detail-more-has-remark');
+                } else {
+                    btn.classList.remove('detail-more-has-remark');
+                }
+            }
         }
         sqCloseRemarkMore();
     }

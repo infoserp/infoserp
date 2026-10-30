@@ -108,9 +108,9 @@ if (count($sq_vat_pcts) === 1) {
     $sq_vat_label = 'VAT';
 }
 
-// Branch TRN + letter header / footer images (space reserved even when blank)
+// Branch TRN + letter header / footer / stamp images (space reserved even when blank)
 $stmt_b = $con->prepare(
-    "SELECT tax_no, header_filepath, footer_filepath
+    "SELECT tax_no, header_filepath, footer_filepath, stamp_path
      FROM branch_master WHERE company_code = ? AND branch_code = ?"
 );
 $stmt_b->execute([$company_code, $branch_code]);
@@ -118,6 +118,7 @@ $sq_branch = $stmt_b->fetch(PDO::FETCH_ASSOC) ?: [];
 $sq_branch_trn = trim((string) ($sq_branch['tax_no'] ?? ''));
 $sq_header_img = erp_print_image_data_uri($sq_branch['header_filepath'] ?? '');
 $sq_footer_img = erp_print_image_data_uri($sq_branch['footer_filepath'] ?? '');
+$sq_stamp_img  = erp_print_image_data_uri($sq_branch['stamp_path'] ?? '');
 
 // Currency
 $sq_currency_code = trim((string) ($sq_h['currency_code'] ?? ''));
@@ -134,6 +135,8 @@ foreach (['fraction_name', 'decimal_name', 'sub_unit', 'sub_currency', 'currency
 }
 $sq_words = erp_print_amount_words($sq_net, $sq_currency_code, $sq_fraction_name);
 $sq_ccy_hdr = $sq_currency_code !== '' ? $sq_currency_code : 'AED';
+
+$sq_subject = trim((string) ($sq_h['subject'] ?? ''));
 
 // Customer block
 $sq_customer = trim((string) $sq_h['customer_name_db']) ?: trim((string) $sq_h['ac_code']);
@@ -222,14 +225,15 @@ foreach ($sq_terms as $t) {
     $sq_term_groups[$gi]['lines'][] = $t;
 }
 
-// Signatory from salesman table (header salesman_code)
+// Signatory from salesman table (header salesman_code) + signature image
 $sq_sign_name  = '';
 $sq_sign_desig = '';
 $sq_sign_phone = '';
+$sq_sign_img   = '';
 $sq_salesman_code = trim((string) ($sq_h['salesman_code'] ?? ''));
 if ($sq_salesman_code !== '') {
     $stmt_sm = $con->prepare(
-        "SELECT salesman_name, designation, mobile_no
+        "SELECT salesman_name, designation, mobile_no, signature_file
          FROM salesman
          WHERE company_code = ? AND salesman_code = ?"
     );
@@ -238,51 +242,56 @@ if ($sq_salesman_code !== '') {
     $sq_sign_name  = trim((string) ($sm['salesman_name'] ?? ''));
     $sq_sign_desig = trim((string) ($sm['designation'] ?? ''));
     $sq_sign_phone = trim((string) ($sm['mobile_no'] ?? ''));
+    $sq_sign_img   = erp_print_image_data_uri($sm['signature_file'] ?? '');
 }
 
 $sq_company_name = trim((string) ($company['name'] ?? ''));
 
-// Pagination: item area height (body sits between fixed header/footer bands)
-$sq_area_mm   = 95;
-$sq_row_mm    = 5.5;
-$sq_wrap_mm   = 4;
-$sq_wrap_chr  = 55;
+// Body below letterhead bands has fixed room; header boxes only on page 1.
+// Reserve last-page space for totals + variable terms + closing/sign.
+$sq_row_mm   = 5.5;
+$sq_wrap_mm  = 4;
+$sq_wrap_chr = 55;
+$sq_area_mm  = 145; // continuation pages (title only, no customer/meta boxes)
+$sq_first_area_mm = 105; // page 1 also has boxes (~28mm) + intro
 
-$sq_pages = [[]];
-$sq_page_mm = [0];
-foreach ($sq_rows as $r) {
-    $text = $r['desc'];
-    if ($r['note'] !== '') {
-        $text .= "\n" . $r['note'];
+$sq_terms_mm = 0.0;
+if (!empty($sq_term_groups)) {
+    $sq_terms_mm = 8.0;
+    foreach ($sq_term_groups as $g) {
+        $sq_terms_mm += 5.0;
+        foreach ($g['lines'] as $line) {
+            $n = count(erp_print_wrap_lines($line['remark'], 70));
+            $sq_terms_mm += max(4.0, $n * 3.5);
+        }
     }
-    $lines = 0;
-    foreach (preg_split("/\r\n|\r|\n/", $text) as $para) {
-        $lines += substr_count(wordwrap($para !== '' ? $para : ' ', $sq_wrap_chr, "\n", true), "\n") + 1;
-    }
-    if ($lines < 1) {
-        $lines = 1;
-    }
-    $r['mm'] = $sq_row_mm + ($lines - 1) * $sq_wrap_mm;
-    $p = count($sq_pages) - 1;
-    if ($sq_pages[$p] && $sq_page_mm[$p] + $r['mm'] > $sq_area_mm) {
-        $sq_pages[] = [];
-        $sq_page_mm[] = 0;
-        $p++;
-    }
-    $sq_pages[$p][] = $r;
-    $sq_page_mm[$p] += $r['mm'];
 }
+// sum(~28) + terms + close(~12) + sign/stamp(~34) + pad
+$sq_footer_reserve = min(130.0, max(78.0, 28.0 + $sq_terms_mm + 12.0 + 34.0 + 6.0));
+// Continuation last page: no boxes. Single-page doc: boxes + footer on page 1.
+$sq_last_area_mm = max(28.0, min($sq_area_mm, 220.0 - $sq_footer_reserve));
+$sq_first_last_area_mm = max(20.0, min($sq_first_area_mm, 185.0 - $sq_footer_reserve));
+
+list($sq_pages, $sq_page_mm) = erp_print_paginate_detail_rows($sq_rows, [
+    'area_mm'            => $sq_area_mm,
+    'first_area_mm'      => $sq_first_area_mm,
+    'last_area_mm'       => $sq_last_area_mm,
+    'first_last_area_mm' => $sq_first_last_area_mm,
+    'row_mm'             => $sq_row_mm,
+    'wrap_mm'            => $sq_wrap_mm,
+    'wrap_chr'           => $sq_wrap_chr,
+]);
 $sq_page_count = count($sq_pages);
 $sq_line_no = 0;
 
 foreach ($sq_pages as $page_index => $page_rows) {
     $is_last = ($page_index === $sq_page_count - 1);
-    $fill_mm = max(0, $sq_area_mm - $sq_page_mm[$page_index]);
     ?>
 <div class="erp-print-sheet pf-sq-sheet<?php echo $page_index > 0 ? ' pf-break' : ''; ?>">
     <div class="pf-sq-head"><?php if ($sq_header_img !== '') { ?><img src="<?php echo $sq_header_img; ?>" alt=""><?php } ?></div>
 
     <div class="pf-sq-body">
+        <?php if ($page_index === 0) { ?>
         <div class="pf-sq-title">QUOTATION</div>
 
         <table class="pf-sq-top">
@@ -309,70 +318,87 @@ foreach ($sq_pages as $page_index => $page_rows) {
                 </td>
             </tr>
         </table>
+        <?php } ?>
 
         <div class="pf-sq-detail">
+            <?php if ($page_index === 0) { ?>
+            <?php if ($sq_subject !== '') { ?>
+            <div class="pf-sq-sub">Sub : <?php echo htmlspecialchars($sq_subject); ?></div>
+            <?php } ?>
             <div class="pf-sq-intro">Thank you very much for your valid enquiry. We are offering our best quote as below.</div>
+            <?php } ?>
 
+            <?php if (!empty($page_rows)) { ?>
             <table class="pf-items pf-sq-items">
+                <colgroup>
+                    <col class="pf-sq-c-no">
+                    <col class="pf-sq-c-desc">
+                    <col class="pf-sq-c-qty">
+                    <col class="pf-sq-c-unit">
+                    <col class="pf-sq-c-price">
+                    <col class="pf-sq-c-amt">
+                </colgroup>
                 <thead>
                     <tr>
-                        <th style="width: 8mm;">No</th>
+                        <th>No</th>
                         <th>Description</th>
-                        <th style="width: 14mm;">Qty</th>
-                        <th style="width: 14mm;">Unit</th>
-                        <th style="width: 24mm;">Price (<?php echo htmlspecialchars($sq_ccy_hdr); ?>)</th>
-                        <th style="width: 26mm;">Amount (<?php echo htmlspecialchars($sq_ccy_hdr); ?>)</th>
+                        <th>Qty</th>
+                        <th>Unit</th>
+                        <th>Price (<?php echo htmlspecialchars($sq_ccy_hdr); ?>)</th>
+                        <th>Amount (<?php echo htmlspecialchars($sq_ccy_hdr); ?>)</th>
                     </tr>
                 </thead>
                 <tbody>
                     <?php foreach ($page_rows as $r) {
-                        $sq_line_no++;
-                        $desc_html = nl2br(htmlspecialchars($r['desc']));
+                        $show = !empty($r['show_values']);
+                        if ($show) {
+                            $sq_line_no++;
+                        }
+                        $desc_html = $r['desc'] !== '' ? nl2br(htmlspecialchars($r['desc'])) : '';
                         if ($r['note'] !== '') {
                             $desc_html .= '<div class="pf-sq-note">' . nl2br(htmlspecialchars($r['note'])) . '</div>';
                         }
+                        if (!empty($r['continued']) && $desc_html === '') {
+                            $desc_html = '<span class="pf-sq-cont-label">(continued)</span>';
+                        }
                         ?>
                     <tr>
-                        <td class="center"><?php echo $sq_line_no; ?></td>
+                        <td class="center"><?php echo $show ? $sq_line_no : ''; ?></td>
                         <td class="wrap"><?php echo $desc_html; ?></td>
-                        <td class="center"><?php echo erp_print_qty($r['qty']); ?></td>
-                        <td class="center"><?php echo htmlspecialchars($r['unit']); ?></td>
-                        <td class="num"><?php echo erp_print_amount($r['rate']); ?></td>
-                        <td class="num"><?php echo erp_print_amount($r['amount']); ?></td>
-                    </tr>
-                    <?php } ?>
-                    <?php if ($fill_mm > 0 && !$is_last) { ?>
-                    <tr class="pf-fill">
-                        <td style="height: <?php echo $fill_mm; ?>mm;"></td><td></td><td></td><td></td><td></td><td></td>
+                        <td class="center"><?php echo $show ? erp_print_qty($r['qty']) : ''; ?></td>
+                        <td class="center"><?php echo $show ? htmlspecialchars($r['unit']) : ''; ?></td>
+                        <td class="num"><?php echo $show ? erp_print_amount($r['rate']) : ''; ?></td>
+                        <td class="num"><?php echo $show ? erp_print_amount($r['amount']) : ''; ?></td>
                     </tr>
                     <?php } ?>
                 </tbody>
             </table>
+            <?php } ?>
 
             <?php if ($is_last) { ?>
+            <!-- Words + totals: Price/Amount columns line up with the item table above -->
             <table class="pf-sq-sum">
+                <colgroup>
+                    <col class="pf-sq-c-words">
+                    <col class="pf-sq-c-price">
+                    <col class="pf-sq-c-amt">
+                </colgroup>
                 <tr>
-                    <td class="pf-sq-words"><?php echo htmlspecialchars($sq_words); ?></td>
-                    <td class="pf-sq-sum-panel">
-                        <table class="pf-sq-sum-grid">
-                            <tr>
-                                <td class="pf-sq-sum-k">Total :</td>
-                                <td class="pf-sq-sum-v"><?php echo erp_print_amount($sq_total); ?></td>
-                            </tr>
-                            <tr>
-                                <td class="pf-sq-sum-k">Discount :</td>
-                                <td class="pf-sq-sum-v"><?php echo erp_print_amount($sq_discount); ?></td>
-                            </tr>
-                            <tr>
-                                <td class="pf-sq-sum-k"><?php echo htmlspecialchars($sq_vat_label); ?> :</td>
-                                <td class="pf-sq-sum-v"><?php echo erp_print_amount($sq_vat); ?></td>
-                            </tr>
-                            <tr class="pf-sq-net">
-                                <td class="pf-sq-sum-k">Net Amount :</td>
-                                <td class="pf-sq-sum-v"><?php echo erp_print_amount($sq_net); ?></td>
-                            </tr>
-                        </table>
-                    </td>
+                    <td class="pf-sq-words" rowspan="4"><?php echo htmlspecialchars($sq_words); ?></td>
+                    <td class="pf-sq-sum-k">Total :</td>
+                    <td class="pf-sq-sum-v"><?php echo erp_print_amount($sq_total); ?></td>
+                </tr>
+                <tr>
+                    <td class="pf-sq-sum-k">Discount :</td>
+                    <td class="pf-sq-sum-v"><?php echo erp_print_amount($sq_discount); ?></td>
+                </tr>
+                <tr>
+                    <td class="pf-sq-sum-k"><?php echo htmlspecialchars($sq_vat_label); ?> :</td>
+                    <td class="pf-sq-sum-v"><?php echo erp_print_amount($sq_vat); ?></td>
+                </tr>
+                <tr class="pf-sq-net">
+                    <td class="pf-sq-sum-k">Net Amount :</td>
+                    <td class="pf-sq-sum-v"><?php echo erp_print_amount($sq_net); ?></td>
                 </tr>
             </table>
 
@@ -410,7 +436,22 @@ foreach ($sq_pages as $page_index => $page_rows) {
 
             <div class="pf-sq-sign">
                 <div class="pf-sq-for">For <?php echo htmlspecialchars($sq_company_name); ?></div>
-                <div class="pf-sq-sign-space"></div>
+                <table class="pf-sq-sign-row">
+                    <tr>
+                        <td class="pf-sq-sign-img-cell">
+                            <?php if ($sq_sign_img !== '') { ?>
+                            <img class="pf-sq-sign-img" src="<?php echo $sq_sign_img; ?>" alt="">
+                            <?php } else { ?>
+                            <div class="pf-sq-sign-space"></div>
+                            <?php } ?>
+                        </td>
+                        <td class="pf-sq-stamp-cell">
+                            <?php if ($sq_stamp_img !== '') { ?>
+                            <img class="pf-sq-stamp" src="<?php echo $sq_stamp_img; ?>" alt="">
+                            <?php } ?>
+                        </td>
+                    </tr>
+                </table>
                 <?php if ($sq_sign_name !== '') { ?><div class="pf-sq-sign-name"><?php echo htmlspecialchars($sq_sign_name); ?></div><?php } ?>
                 <?php if ($sq_sign_desig !== '') { ?><div class="pf-sq-sign-meta"><?php echo htmlspecialchars($sq_sign_desig); ?></div><?php } ?>
                 <?php if ($sq_sign_phone !== '') { ?><div class="pf-sq-sign-meta"><?php echo htmlspecialchars($sq_sign_phone); ?></div><?php } ?>

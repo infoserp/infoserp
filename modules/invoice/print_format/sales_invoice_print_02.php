@@ -93,9 +93,9 @@ if (count($inv_vat_pcts) === 1) {
     $inv_vat_label = 'VAT';
 }
 
-// Branch TRN + letter header / footer images
+// Branch TRN + letter header / footer / stamp images
 $stmt_b = $con->prepare(
-    "SELECT tax_no, header_filepath, footer_filepath
+    "SELECT tax_no, header_filepath, footer_filepath, stamp_path
      FROM branch_master WHERE company_code = ? AND branch_code = ?"
 );
 $stmt_b->execute([$company_code, $branch_code]);
@@ -103,6 +103,7 @@ $inv_branch = $stmt_b->fetch(PDO::FETCH_ASSOC) ?: [];
 $inv_trn        = trim((string) ($inv_branch['tax_no'] ?? ''));
 $inv_header_img = erp_print_image_data_uri($inv_branch['header_filepath'] ?? '');
 $inv_footer_img = erp_print_image_data_uri($inv_branch['footer_filepath'] ?? '');
+$inv_stamp_img  = erp_print_image_data_uri($inv_branch['stamp_path'] ?? '');
 
 // Currency
 $inv_currency_code = trim((string) ($inv_h['currency_code'] ?? ''));
@@ -199,47 +200,50 @@ while ($b = $stmt_bank->fetch(PDO::FETCH_ASSOC)) {
 
 $inv_company_name = trim((string) ($company['name'] ?? ''));
 
-// Pagination — tall item area so column lines fill the page (sample style)
-$inv_area_mm  = 120;
+// Salesman signature image (invoice_h.salesman_code → salesman.signature_file)
+$inv_sign_img = '';
+$inv_salesman_code = trim((string) ($inv_h['salesman_code'] ?? ''));
+if ($inv_salesman_code !== '') {
+    $stmt_sm = $con->prepare(
+        "SELECT signature_file FROM salesman WHERE company_code = ? AND salesman_code = ?"
+    );
+    $stmt_sm->execute([$company_code, $inv_salesman_code]);
+    $sm = $stmt_sm->fetch(PDO::FETCH_ASSOC) ?: [];
+    $inv_sign_img = erp_print_image_data_uri($sm['signature_file'] ?? '');
+}
+
+// Pagination: customer/info boxes only on page 1; reserve last-page room for
+// bank + totals + amount-in-words + signature under the letterhead bands.
 $inv_row_mm   = 5.5;
 $inv_wrap_mm  = 4;
 $inv_wrap_chr = 58;
+$inv_area_mm  = 160; // continuation (title only)
+$inv_first_area_mm = 115; // page 1 also has info boxes
+// bank(~28) + words(~8) + pageno(~5) + sign/stamp(~28) + company(~8) + pad
+$inv_footer_reserve = 95.0;
+$inv_last_area_mm = max(24.0, min($inv_area_mm, 210.0 - $inv_footer_reserve));
+$inv_first_last_area_mm = max(18.0, min($inv_first_area_mm, 175.0 - $inv_footer_reserve));
 
-$inv_pages = [[]];
-$inv_page_mm = [0];
-foreach ($inv_rows as $r) {
-    $text = $r['desc'];
-    if ($r['note'] !== '') {
-        $text .= "\n" . $r['note'];
-    }
-    $lines = 0;
-    foreach (preg_split("/\r\n|\r|\n/", $text) as $para) {
-        $lines += substr_count(wordwrap($para !== '' ? $para : ' ', $inv_wrap_chr, "\n", true), "\n") + 1;
-    }
-    if ($lines < 1) {
-        $lines = 1;
-    }
-    $r['mm'] = $inv_row_mm + ($lines - 1) * $inv_wrap_mm;
-    $p = count($inv_pages) - 1;
-    if ($inv_pages[$p] && $inv_page_mm[$p] + $r['mm'] > $inv_area_mm) {
-        $inv_pages[] = [];
-        $inv_page_mm[] = 0;
-        $p++;
-    }
-    $inv_pages[$p][] = $r;
-    $inv_page_mm[$p] += $r['mm'];
-}
+list($inv_pages, $inv_page_mm) = erp_print_paginate_detail_rows($inv_rows, [
+    'area_mm'            => $inv_area_mm,
+    'first_area_mm'      => $inv_first_area_mm,
+    'last_area_mm'       => $inv_last_area_mm,
+    'first_last_area_mm' => $inv_first_last_area_mm,
+    'row_mm'             => $inv_row_mm,
+    'wrap_mm'            => $inv_wrap_mm,
+    'wrap_chr'           => $inv_wrap_chr,
+]);
 $inv_page_count = count($inv_pages);
 $inv_line_no = 0;
 
 foreach ($inv_pages as $page_index => $page_rows) {
     $is_last = ($page_index === $inv_page_count - 1);
-    $fill_mm = max(0, $inv_area_mm - $inv_page_mm[$page_index]);
     ?>
 <div class="erp-print-sheet pf-inv2-sheet<?php echo $page_index > 0 ? ' pf-break' : ''; ?>">
     <div class="pf-inv2-head"><?php if ($inv_header_img !== '') { ?><img src="<?php echo $inv_header_img; ?>" alt=""><?php } ?></div>
 
     <div class="pf-inv2-body">
+        <?php if ($page_index === 0) { ?>
         <div class="pf-inv2-title-box">
             <div class="pf-inv2-title">TAX INVOICE</div>
             <div class="pf-inv2-trn">T.R.No. : <?php echo htmlspecialchars($inv_trn); ?></div>
@@ -305,8 +309,10 @@ foreach ($inv_pages as $page_index => $page_rows) {
                 </td>
             </tr>
         </table>
+        <?php } ?>
 
-        <table class="pf-items pf-inv2-items">
+        <?php if (!empty($page_rows)) { ?>
+        <table class="pf-items pf-inv2-items<?php echo $page_index > 0 ? ' pf-inv2-items-cont' : ''; ?>">
             <colgroup>
                 <col class="pf-inv2-c-no">
                 <col class="pf-inv2-c-desc">
@@ -325,27 +331,29 @@ foreach ($inv_pages as $page_index => $page_rows) {
             </thead>
             <tbody>
                 <?php foreach ($page_rows as $r) {
-                    $inv_line_no++;
-                    $desc_html = nl2br(htmlspecialchars($r['desc']));
+                    $show = !empty($r['show_values']);
+                    if ($show) {
+                        $inv_line_no++;
+                    }
+                    $desc_html = $r['desc'] !== '' ? nl2br(htmlspecialchars($r['desc'])) : '';
                     if ($r['note'] !== '') {
                         $desc_html .= '<div class="pf-inv2-note">' . nl2br(htmlspecialchars($r['note'])) . '</div>';
                     }
+                    if (!empty($r['continued']) && $desc_html === '') {
+                        $desc_html = '<span class="pf-inv2-cont-label">(continued)</span>';
+                    }
                     ?>
                 <tr>
-                    <td class="center"><?php echo $inv_line_no; ?></td>
+                    <td class="center"><?php echo $show ? $inv_line_no : ''; ?></td>
                     <td class="wrap"><?php echo $desc_html; ?></td>
-                    <td class="num"><?php echo erp_print_qty($r['qty']); ?></td>
-                    <td class="num"><?php echo erp_print_amount($r['rate']); ?></td>
-                    <td class="num"><?php echo erp_print_amount($r['amount']); ?></td>
-                </tr>
-                <?php } ?>
-                <?php if ($fill_mm > 0) { ?>
-                <tr class="pf-fill">
-                    <td style="height: <?php echo $fill_mm; ?>mm;"></td><td></td><td></td><td></td><td></td>
+                    <td class="num"><?php echo $show ? erp_print_qty($r['qty']) : ''; ?></td>
+                    <td class="num"><?php echo $show ? erp_print_amount($r['rate']) : ''; ?></td>
+                    <td class="num"><?php echo $show ? erp_print_amount($r['amount']) : ''; ?></td>
                 </tr>
                 <?php } ?>
             </tbody>
         </table>
+        <?php } ?>
 
         <?php if ($is_last) { ?>
         <!-- Totals width = Price + Amount columns so the grid lines up under the item table -->
@@ -382,16 +390,26 @@ foreach ($inv_pages as $page_index => $page_rows) {
         </table>
 
         <div class="pf-inv2-words"><?php echo htmlspecialchars($inv_words); ?></div>
-
-        <div class="pf-inv2-sign">
-            <div class="pf-inv2-for">For <?php echo htmlspecialchars($inv_company_name); ?></div>
-        </div>
         <?php } else { ?>
         <div class="pf-inv2-cont">Continued on next page…</div>
         <?php } ?>
 
         <div class="pf-pageno">Page <?php echo $page_index + 1; ?> of <?php echo $inv_page_count; ?></div>
     </div>
+
+    <?php if ($is_last) { ?>
+    <div class="pf-inv2-sign-block">
+        <div class="pf-inv2-sign-media">
+            <?php if ($inv_sign_img !== '') { ?>
+            <img class="pf-inv2-sign-img" src="<?php echo $inv_sign_img; ?>" alt="">
+            <?php } ?>
+            <?php if ($inv_stamp_img !== '') { ?>
+            <img class="pf-inv2-stamp" src="<?php echo $inv_stamp_img; ?>" alt="">
+            <?php } ?>
+        </div>
+        <div class="pf-inv2-for">For <?php echo htmlspecialchars($inv_company_name !== '' ? $inv_company_name : ($company['name'] ?? '')); ?></div>
+    </div>
+    <?php } ?>
 
     <div class="pf-inv2-foot"><?php if ($inv_footer_img !== '') { ?><img src="<?php echo $inv_footer_img; ?>" alt=""><?php } ?></div>
 </div>

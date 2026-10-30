@@ -96,38 +96,35 @@ $inv_words = erp_print_amount_words($inv_net_total, $inv_currency_code, $inv_fra
 $inv_customer = trim((string) $inv_h['customer_name_db']) ?: trim((string) $inv_h['ac_code']);
 $inv_remark   = trim((string) ($inv_h['remark'] ?? $inv_h['remarks'] ?? ''));
 
-// Item area keeps the same height on every page. Descriptions word-wrap (about 23 characters
-// per line in the 42mm column): each extra line adds $inv_wrap_mm to the row.
-$inv_area_mm  = 95;
+// Bill-to / doc boxes only on page 1. Format 1 still shows totals/notes/sign
+// on every page, so continuation pages gain the box height as extra item room.
+$inv_area_mm  = 105;
+$inv_first_area_mm = 70;
 $inv_row_mm   = 5.5;
 $inv_wrap_mm  = 4;
 $inv_wrap_chr = 23;
+$inv_last_area_mm = 70;
 
-$inv_pages = [[]];
-$inv_page_mm = [0];
-foreach ($inv_rows as $r) {
-    $lines = substr_count(wordwrap($r['desc'], $inv_wrap_chr, "\n", true), "\n") + 1;
-    $r['mm'] = $inv_row_mm + ($lines - 1) * $inv_wrap_mm;
-    $p = count($inv_pages) - 1;
-    if ($inv_pages[$p] && $inv_page_mm[$p] + $r['mm'] > $inv_area_mm) {
-        $inv_pages[] = [];
-        $inv_page_mm[] = 0;
-        $p++;
-    }
-    $inv_pages[$p][] = $r;
-    $inv_page_mm[$p] += $r['mm'];
-}
+list($inv_pages, $inv_page_mm) = erp_print_paginate_detail_rows($inv_rows, [
+    'area_mm'            => $inv_area_mm,
+    'first_area_mm'      => $inv_first_area_mm,
+    'last_area_mm'       => $inv_last_area_mm,
+    'first_last_area_mm' => $inv_first_area_mm,
+    'row_mm'             => $inv_row_mm,
+    'wrap_mm'            => $inv_wrap_mm,
+    'wrap_chr'           => $inv_wrap_chr,
+]);
 $inv_page_count = count($inv_pages);
 $inv_line_no = 0;
 
 foreach ($inv_pages as $page_index => $page_rows) {
     $is_last = ($page_index === $inv_page_count - 1);
-    $fill_mm = max(0, $inv_area_mm - $inv_page_mm[$page_index]);
     ?>
 <div class="erp-print-sheet pf-inv-sheet<?php echo $page_index > 0 ? ' pf-break' : ''; ?>">
     <div class="pf-inv-head"><?php if ($inv_header_img !== '') { ?><img src="<?php echo $inv_header_img; ?>" alt=""><?php } ?></div>
 
     <div class="pf-inv-body">
+        <?php if ($page_index === 0) { ?>
         <div class="pf-inv-title">
             <div class="pf-inv-title-main">TAX INVOICE</div>
             <?php if ($inv_trn !== '') { ?><div class="pf-inv-trn">TRN : <?php echo htmlspecialchars($inv_trn); ?></div><?php } ?>
@@ -157,6 +154,7 @@ foreach ($inv_pages as $page_index => $page_rows) {
                 </td>
             </tr>
         </table>
+        <?php } ?>
 
         <table class="pf-items pf-inv-items">
             <thead>
@@ -174,23 +172,27 @@ foreach ($inv_pages as $page_index => $page_rows) {
                 </tr>
             </thead>
             <tbody>
-                <?php foreach ($page_rows as $r) { $inv_line_no++; ?>
+                <?php foreach ($page_rows as $r) {
+                    $show = !empty($r['show_values']);
+                    if ($show) {
+                        $inv_line_no++;
+                    }
+                    $desc_html = $r['desc'] !== '' ? nl2br(htmlspecialchars($r['desc'])) : '';
+                    if (!empty($r['continued']) && $desc_html === '') {
+                        $desc_html = '<span class="pf-inv-cont-label">(continued)</span>';
+                    }
+                    ?>
                 <tr>
-                    <td class="center"><?php echo $inv_line_no; ?></td>
-                    <td><?php echo htmlspecialchars($r['code']); ?></td>
-                    <td class="wrap"><?php echo htmlspecialchars($r['desc']); ?></td>
-                    <td class="center"><?php echo erp_print_qty($r['qty']); ?></td>
-                    <td class="num"><?php echo erp_print_amount($r['rate']); ?></td>
-                    <td class="num"><?php echo erp_print_amount($r['discount']); ?></td>
-                    <td class="num"><?php echo erp_print_amount($r['amount']); ?></td>
-                    <td class="num"><?php echo erp_print_amount($r['ex_rate']); ?></td>
-                    <td class="num"><?php echo erp_print_amount($r['excise']); ?></td>
-                    <td class="num"><?php echo erp_print_amount($r['net']); ?></td>
-                </tr>
-                <?php } ?>
-                <?php if ($fill_mm > 0) { ?>
-                <tr class="pf-fill">
-                    <td style="height: <?php echo $fill_mm; ?>mm;"></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td>
+                    <td class="center"><?php echo $show ? $inv_line_no : ''; ?></td>
+                    <td><?php echo $show ? htmlspecialchars($r['code']) : ''; ?></td>
+                    <td class="wrap"><?php echo $desc_html; ?></td>
+                    <td class="center"><?php echo $show ? erp_print_qty($r['qty']) : ''; ?></td>
+                    <td class="num"><?php echo $show ? erp_print_amount($r['rate']) : ''; ?></td>
+                    <td class="num"><?php echo $show ? erp_print_amount($r['discount']) : ''; ?></td>
+                    <td class="num"><?php echo $show ? erp_print_amount($r['amount']) : ''; ?></td>
+                    <td class="num"><?php echo $show ? erp_print_amount($r['ex_rate']) : ''; ?></td>
+                    <td class="num"><?php echo $show ? erp_print_amount($r['excise']) : ''; ?></td>
+                    <td class="num"><?php echo $show ? erp_print_amount($r['net']) : ''; ?></td>
                 </tr>
                 <?php } ?>
                 <tr class="pf-total">

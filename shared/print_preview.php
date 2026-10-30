@@ -60,7 +60,11 @@ if ($as_pdf) {
             erp_print_pdf($sheets_html, $doc_no);
         } catch (Throwable $e) {
             error_log('print_preview.php PDF error: ' . $e->getMessage());
-            $print_error = 'The PDF could not be created.';
+            // Surface the real reason (missing vendor / old PHP) instead of a blank generic alert
+            $detail = trim($e->getMessage());
+            $print_error = $detail !== ''
+                ? ('The PDF could not be created. ' . $detail)
+                : 'The PDF could not be created.';
         }
     }
     while (ob_get_level() > 0) {
