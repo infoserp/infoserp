@@ -825,23 +825,6 @@ $sq_self_url = '/' . ltrim(
                         </div>
                     </div>
                     <div class="doc-field">
-                        <label class="doc-lbl">Apply Discount</label>
-                        <div class="doc-sum-pair">
-                            <input type="number" name="apply_discount_pct" id="applyDiscountPct" class="doc-inp doc-inp-pct" value="" step="0.01" min="0" max="100"
-                                   placeholder="%" <?php echo $is_view_mode ? 'readonly' : ''; ?>
-                                   onchange="sqApplyHeaderDiscountPct()" onblur="sqApplyHeaderDiscountPct()">
-                            <input type="number" name="apply_discount_amt" id="applyDiscountAmt" class="doc-inp doc-inp-num" value="" step="0.01" min="0"
-                                   placeholder="Amt" <?php echo $is_view_mode ? 'readonly' : ''; ?>
-                                   onchange="sqApplyHeaderDiscountAmt()" onblur="sqApplyHeaderDiscountAmt()">
-                        </div>
-                    </div>
-                    <div class="doc-field">
-                        <label class="doc-lbl">Apply VAT %</label>
-                        <input type="number" name="apply_vat_pct" id="applyVatPct" class="doc-inp" value="" step="0.01" min="0"
-                               placeholder="Apply to all lines" <?php echo $is_view_mode ? 'readonly' : ''; ?>
-                               onchange="sqApplyHeaderVat()" onblur="sqApplyHeaderVat()">
-                    </div>
-                    <div class="doc-field">
                         <label class="doc-lbl">Actions</label>
                         <div class="doc-inp-group">
                             <button type="button" class="doc-action-btn doc-action-terms" onclick="erpOpenVariableTerms()" title="Variable Terms"><i class="fa fa-file-text-o"></i> Variable Terms</button>
@@ -856,6 +839,23 @@ $sq_self_url = '/' . ltrim(
         <aside class="doc-page-aside">
             <section class="doc-panel">
                 <h3 class="doc-section-title">Summary</h3>
+                <div class="doc-sum-row">
+                    <label class="doc-lbl">Apply Discount</label>
+                    <div class="doc-sum-pair">
+                        <input type="number" name="apply_discount_pct" id="applyDiscountPct" class="doc-inp doc-inp-pct" value="" step="0.01" min="0" max="100"
+                               placeholder="%" <?php echo $is_view_mode ? 'readonly' : ''; ?>
+                               onchange="sqApplyHeaderDiscountPct()" onblur="sqApplyHeaderDiscountPct()">
+                        <input type="number" name="apply_discount_amt" id="applyDiscountAmt" class="doc-inp doc-inp-num" value="" step="0.01" min="0"
+                               placeholder="Amt" <?php echo $is_view_mode ? 'readonly' : ''; ?>
+                               onchange="sqApplyHeaderDiscountAmt()" onblur="sqApplyHeaderDiscountAmt()">
+                    </div>
+                </div>
+                <div class="doc-sum-row">
+                    <label class="doc-lbl">Apply VAT %</label>
+                    <input type="number" name="apply_vat_pct" id="applyVatPct" class="doc-inp" value="" step="0.01" min="0"
+                           placeholder="Apply to all lines" <?php echo $is_view_mode ? 'readonly' : ''; ?>
+                           onchange="sqApplyHeaderVat()" onblur="sqApplyHeaderVat()">
+                </div>
                 <div class="doc-sum-row">
                     <label class="doc-lbl">Amount</label>
                     <input type="text" name="amount" class="doc-inp doc-inp-num" value="<?php echo htmlspecialchars($amount); ?>" readonly>

@@ -688,7 +688,7 @@ $rv_self_url = '/' . ltrim(
                                                     data-rate="<?php echo htmlspecialchars($cur['exchange_rate']); ?>"
                                                     data-name="<?php echo htmlspecialchars($cur['name']); ?>"
                                                     <?php echo ($cur['code'] === $currency) ? 'selected' : ''; ?>>
-                                                <?php echo htmlspecialchars($cur['code'] . ' - ' . $cur['name']); ?>
+                                                <?php echo htmlspecialchars($cur['code']); ?>
                                             </option>
                                         <?php endforeach; ?>
                                     </select>
@@ -1238,6 +1238,34 @@ $rv_self_url = '/' . ltrim(
         window.location.href = erpNavUrl('doc_type=<?php echo urlencode($selected_doc_type); ?>');
     };
 
+    // PREVIEW — print format (only for a saved document number)
+    window.erpToolbar.onPreview = function () {
+        var docNo = '';
+        var docEl = document.querySelector('#rvForm input[name="doc_no"]');
+        if (docEl) docNo = String(docEl.value || '').trim();
+        var isUpd = document.querySelector('#rvForm input[name="is_update"]');
+        var saved = <?php echo (!empty($is_view_mode) && trim((string) $doc_no) !== '') ? 'true' : 'false'; ?>
+            || (isUpd && String(isUpd.value) === '1');
+        if (!docNo || !saved) {
+            if (typeof erpToast === 'function') {
+                erpToast('warning', 'Save the document before opening the preview.', 4000);
+            } else {
+                alert('Save the document before opening the preview.');
+            }
+            return;
+        }
+        var docType = (document.getElementById('doc_type_selected_field') || {}).value
+            || <?php echo json_encode($selected_doc_type); ?>;
+        erpOpenPrintPreview(
+            <?php echo json_encode($target_code); ?>,
+            docType,
+            docNo
+        );
+    };
+    window.erpToolbar.onPrint = function () {
+        window.erpToolbar.onPreview();
+    };
+
     // FIND — navigate to the document selected in the toolbar's search modal
     window.erpToolbar.onDocSelect = function (doc_no) {
         window.location.href = erpNavUrl('doc_no=' + encodeURIComponent(doc_no)
@@ -1307,10 +1335,15 @@ $rv_self_url = '/' . ltrim(
         window.ERP_DOC_TYPE = '<?php echo addslashes($selected_doc_type); ?>';
     }
     <?php if (!empty($save_success)): ?>
-    // After save: disable SAVE button and update PRIOR/NEXT toolbar navigation
+    // After save: disable SAVE, enable Preview, update PRIOR/NEXT
     (function() {
         var tbSave = document.getElementById('tbSave');
         if (tbSave) tbSave.disabled = true;
+        var tbPreview = document.getElementById('tbPreview');
+        if (tbPreview) {
+            tbPreview.disabled = false;
+            tbPreview.title = 'Preview';
+        }
         window.ERP_PREV_DOC_NO = <?php echo json_encode($_save_prev_doc ?? ''); ?>;
         window.ERP_NEXT_DOC_NO = <?php echo json_encode($_save_next_doc ?? ''); ?>;
         var tbPrior = document.getElementById('tbPrior');
@@ -1320,4 +1353,17 @@ $rv_self_url = '/' . ltrim(
         if (isUpd) isUpd.value = '1';
     })();
     <?php endif; ?>
+
+    // Ensure Preview is clickable when viewing a saved voucher
+    (function () {
+        var isUpd = document.querySelector('#rvForm input[name="is_update"]');
+        var saved = <?php echo (!empty($is_view_mode) && trim((string) $doc_no) !== '') ? 'true' : 'false'; ?>
+            || (isUpd && String(isUpd.value) === '1');
+        if (!saved) return;
+        var tbPreview = document.getElementById('tbPreview');
+        if (tbPreview) {
+            tbPreview.disabled = false;
+            tbPreview.title = 'Preview';
+        }
+    })();
 </script>

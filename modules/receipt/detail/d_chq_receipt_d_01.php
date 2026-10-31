@@ -212,6 +212,21 @@ $rvd_self_url = '/' . ltrim(
     </div>
 </div>
 
+<!-- Debit unlock — same INFOS Yes/No style as unsaved-leave warning -->
+<div id="rvdDebitAskModal" class="popup-overlay erp-search erp-leave-warn" style="display:none; z-index:1300;">
+    <div class="erp-search-dialog sm erp-leave-dialog" role="alertdialog" aria-modal="true" aria-labelledby="rvdDebitAskTitle" aria-describedby="rvdDebitAskMsg">
+        <div class="erp-leave-icon" aria-hidden="true"><i class="fa fa-exclamation-circle"></i></div>
+        <div class="erp-leave-body">
+            <h4 id="rvdDebitAskTitle">INFOS</h4>
+            <p id="rvdDebitAskMsg">Would you like to enter a debit amount for this line?</p>
+        </div>
+        <div class="erp-leave-actions">
+            <button type="button" class="erp-leave-btn primary" id="rvdDebitAskYes">Yes</button>
+            <button type="button" class="erp-leave-btn" id="rvdDebitAskNo">No</button>
+        </div>
+    </div>
+</div>
+
 <script>
     var RVD_SELF          = <?php echo json_encode($rvd_self_url); ?>;
     var RVD_HEADER_SELF   = (typeof _rvHeaderSelf !== 'undefined') ? _rvHeaderSelf : '';
@@ -264,7 +279,7 @@ $rvd_self_url = '/' . ltrim(
             +   '<td><input type="text" class="detail-input" data-f="ac_name" tabindex="-1"></td>'
             +   '<td><div class="detail-cell"><input type="text" class="detail-input" data-f="narration" maxlength="1000">'
             +     '<button type="button" class="detail-more" tabindex="-1" onclick="rvdOpenMore(this)">More..</button></div></td>'
-            +   '<td><input type="text" class="detail-input num" data-f="dr_amount"></td>'
+            +   '<td><input type="text" class="detail-input num" data-f="dr_amount" data-dr-unlocked="0" readonly title="Debit is locked until confirmed"></td>'
             +   '<td><input type="text" class="detail-input num" data-f="cr_amount"></td>'
             +   '<td><div class="detail-cell"><input type="text" class="detail-input" data-f="invoice_no" maxlength="50">'
             // +     '<button type="button" class="rvd-pick detail-pick" data-pick="invoice" tabindex="-1" title="Select invoice (F2)"><i class="fa fa-arrow-circle-down"></i></button>'
@@ -323,6 +338,85 @@ $rvd_self_url = '/' . ltrim(
         document.getElementById('rvdEmpty').style.display = lines.length ? 'none' : '';
     }
 
+    function rvdIsDebitUnlocked(el) {
+        return el && el.getAttribute('data-dr-unlocked') === '1';
+    }
+
+    function rvdApplyDebitLock(scope) {
+        scope.querySelectorAll('[data-f="dr_amount"]').forEach(function (el) {
+            var unlock = rvdEditable && rvdIsDebitUnlocked(el);
+            el.readOnly = !unlock;
+            el.style.cursor = (rvdEditable && !unlock) ? 'pointer' : '';
+            el.title = unlock ? '' : 'Debit is locked until confirmed';
+        });
+    }
+
+    var _rvdDebitAskEl = null;
+    var _rvdDebitAskOpen = false;
+
+    function rvdCloseDebitAsk() {
+        var modal = document.getElementById('rvdDebitAskModal');
+        if (modal) modal.style.display = 'none';
+        _rvdDebitAskOpen = false;
+        _rvdDebitAskEl = null;
+    }
+
+    function rvdUnlockDebitField(el) {
+        if (!el) return;
+        el.setAttribute('data-dr-unlocked', '1');
+        el.readOnly = false;
+        el.style.cursor = '';
+        el.title = '';
+    }
+
+    /** App-style Yes/No (not browser confirm). Only call from Debit field user actions. */
+    function rvdRequestDebitUnlock(el) {
+        if (!rvdEditable || !el || rvdIsDebitUnlocked(el) || _rvdDebitAskOpen) return;
+        _rvdDebitAskOpen = true;
+        _rvdDebitAskEl = el;
+        var modal = document.getElementById('rvdDebitAskModal');
+        if (!modal) {
+            _rvdDebitAskOpen = false;
+            return;
+        }
+        modal.style.display = 'flex';
+        var yes = document.getElementById('rvdDebitAskYes');
+        if (yes) yes.focus();
+    }
+
+    document.addEventListener('click', function (e) {
+        if (!e.target || !e.target.closest) return;
+        if (e.target.closest('#rvdDebitAskYes')) {
+            var el = _rvdDebitAskEl;
+            rvdCloseDebitAsk();
+            if (el) {
+                rvdUnlockDebitField(el);
+                setTimeout(function () { el.focus(); }, 0);
+            }
+            return;
+        }
+        if (e.target.closest('#rvdDebitAskNo') || e.target.id === 'rvdDebitAskModal') {
+            rvdCloseDebitAsk();
+        }
+    });
+    document.addEventListener('keydown', function (e) {
+        var modal = document.getElementById('rvdDebitAskModal');
+        if (!modal || modal.style.display === 'none') return;
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            rvdCloseDebitAsk();
+        }
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            var el = _rvdDebitAskEl;
+            rvdCloseDebitAsk();
+            if (el) {
+                rvdUnlockDebitField(el);
+                setTimeout(function () { el.focus(); }, 0);
+            }
+        }
+    });
+
     function rvdApplyEditable(scope) {
         scope.querySelectorAll('[data-f]').forEach(function (el) {
             var locked = !rvdEditable || RVD_LOCKED.indexOf(el.getAttribute('data-f')) >= 0;
@@ -332,6 +426,8 @@ $rvd_self_url = '/' . ltrim(
                 el.readOnly = locked;
             }
         });
+        // Debit stays view-only until the user confirms unlock (Receipt Voucher only)
+        rvdApplyDebitLock(scope);
         scope.querySelectorAll('[data-f="ac_code"]').forEach(function (el) { el.style.cursor = rvdEditable ? 'pointer' : ''; });
         scope.querySelectorAll('.rvd-pick').forEach(function (b) { b.disabled = !rvdEditable; });
         scope.querySelectorAll('.rvd-del').forEach(function (b) { b.style.display = rvdEditable ? '' : 'none'; });
@@ -499,7 +595,8 @@ $rvd_self_url = '/' . ltrim(
                 rvdField(l, 'ac_code').value = row.ac_code;
                 rvdField(l, 'ac_name').value = row.description;
                 rvdField(l, 'ac_code').classList.remove('is-invalid');
-                rvdField(l, 'dr_amount').focus();
+                // Focus Credit — do not focus Debit (Debit unlock is user-initiated only)
+                rvdField(l, 'cr_amount').focus();
             }
         });
     }
@@ -578,7 +675,8 @@ $rvd_self_url = '/' . ltrim(
             grid.querySelectorAll('.rvd-line.detail-line-active').forEach(function (l) { if (l !== lineEl) l.classList.remove('detail-line-active'); });
             if (lineEl) lineEl.classList.add('detail-line-active');
             var f = e.target.getAttribute('data-f');
-            if (rvdEditable && (f === 'dr_amount' || f === 'cr_amount') && e.target.value !== '') {
+            // Do not prompt on focus alone (account select must not trigger Debit unlock)
+            if (rvdEditable && (f === 'dr_amount' || f === 'cr_amount') && e.target.value !== '' && !e.target.readOnly) {
                 e.target.value = String(rvdParseNum(e.target.value));
             }
         });
@@ -595,6 +693,16 @@ $rvd_self_url = '/' . ltrim(
             if (f === 'dr_amount' || f === 'cr_amount') rvdRecalc();
         });
 
+        // Debit unlock only when the user acts on the Debit input (not after account pick)
+        grid.addEventListener('pointerdown', function (e) {
+            var el = e.target;
+            if (!el || el.getAttribute('data-f') !== 'dr_amount') return;
+            if (!rvdEditable || rvdIsDebitUnlocked(el)) return;
+            e.preventDefault();
+            e.stopPropagation();
+            rvdRequestDebitUnlock(el);
+        }, true);
+
         grid.addEventListener('click', function (e) {
             if (rvdEditable && e.target.getAttribute('data-f') === 'ac_code') {
                 rvdLookupAccount(e.target.closest('.rvd-line'));
@@ -609,6 +717,12 @@ $rvd_self_url = '/' . ltrim(
 
         grid.addEventListener('keydown', function (e) {
             var f = e.target.getAttribute('data-f');
+            if (f === 'dr_amount' && rvdEditable && !rvdIsDebitUnlocked(e.target)) {
+                if (e.key === 'Tab') return;
+                e.preventDefault();
+                rvdRequestDebitUnlock(e.target);
+                return;
+            }
             if (e.key === 'Enter') {
                 e.preventDefault();
                 return;

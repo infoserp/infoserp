@@ -9,6 +9,7 @@
  *   Invoice layout ... .pf-inv-sheet (.pf-inv-head / .pf-inv-body / .pf-inv-foot), .pf-inv-*
  *   Invoice format 2 . .pf-inv2-sheet, .pf-inv2-*
  *   Quotation layout . .pf-sq-sheet, .pf-sq-*
+ *   Receipt voucher .. .pf-rv-sheet, .pf-rv-*
  *
  * Sheet and .pf-* rules are rendered by Dompdf too: keep them to tables, borders and
  * mm/pt units (no flex, grid or CSS variables).
@@ -1043,6 +1044,246 @@ html body.erp-print-page {
 }
 .pf-inv2-body .pf-pageno {
     margin-top: 1.5mm;
+    font-size: 8pt;
+    color: #475569;
+}
+
+/* ---------------------------- Receipt Voucher (pf-rv) ---------------------------- */
+.erp-print-sheet.pf-rv-sheet {
+    display: table;
+    table-layout: fixed;
+    overflow: hidden;
+}
+.erp-print-pdf .erp-print-sheet.pf-rv-sheet {
+    page-break-after: always;
+}
+.pf-rv-head,
+.pf-rv-foot {
+    display: table-row;
+}
+.pf-rv-head img,
+.pf-rv-foot img {
+    display: block;
+    width: 100%;
+    object-fit: cover;
+}
+.pf-rv-head img { height: 38mm; }
+.pf-rv-foot img { height: 22mm; }
+.pf-rv-body {
+    display: table-cell;
+    vertical-align: top;
+    padding: 4mm 10mm 3mm;
+    height: 100%;
+}
+
+.pf-rv-frame {
+    border: 1.2pt solid #1e3a8a;
+    padding: 3.5mm 4mm 4mm;
+    margin-bottom: 3mm;
+}
+.pf-rv-top {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 3mm;
+    table-layout: fixed;
+}
+.pf-rv-top td { padding: 0; vertical-align: top; }
+.pf-rv-top-l { width: 28%; }
+.pf-rv-top-c { width: 44%; text-align: center; vertical-align: middle; }
+.pf-rv-top-r { width: 28%; text-align: right; }
+.pf-rv-amt-box {
+    border: 1pt solid #000;
+    width: 34mm;
+    text-align: center;
+}
+.pf-rv-amt-lbl {
+    padding: 1mm 2mm;
+    font-size: 8pt;
+    font-weight: bold;
+    border-bottom: 1pt solid #000;
+    white-space: nowrap;
+}
+.pf-rv-amt-val {
+    padding: 1.5mm 2.5mm;
+    font-size: 11pt;
+    font-weight: bold;
+}
+.pf-rv-title {
+    text-align: center;
+    font-size: 14pt;
+    font-weight: bold;
+    text-decoration: underline;
+    letter-spacing: .3pt;
+    padding: 2mm 4mm 0;
+}
+.pf-rv-meta {
+    border-collapse: collapse;
+    margin-left: auto;
+}
+.pf-rv-meta td {
+    padding: .3mm 0;
+    font-size: 9pt;
+    vertical-align: baseline;
+}
+.pf-rv-meta td.pf-k { font-weight: bold; white-space: nowrap; padding-right: 1mm; }
+.pf-rv-meta td.pf-sep { width: 3mm; font-weight: bold; }
+.pf-rv-meta td.pf-v { font-weight: bold; padding-left: 1mm; white-space: nowrap; }
+
+.pf-rv-lines {
+    width: 100%;
+    border-collapse: collapse;
+    clear: both;
+    margin-top: 2.5mm;
+}
+.pf-rv-lines td {
+    padding: 1.6mm 0 .8mm;
+    font-size: 9pt;
+    vertical-align: baseline;
+}
+.pf-rv-lbl {
+    width: 42mm;
+    font-weight: bold;
+    white-space: nowrap;
+}
+.pf-rv-colon {
+    width: 4mm;
+    font-weight: bold;
+}
+.pf-rv-uline {
+    border-bottom: 1pt solid #000;
+    padding-left: 1.5mm !important;
+    font-weight: bold;
+}
+
+.pf-rv-chq {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 2mm;
+}
+.pf-rv-chq-cell {
+    padding: 1.6mm 2mm 1.6mm 0;
+    font-size: 9pt;
+    vertical-align: baseline;
+    white-space: nowrap;
+}
+.pf-rv-chq-val {
+    display: inline-block;
+    min-width: 22mm;
+    padding: 0 1mm;
+    border-bottom: 1pt solid #000;
+    font-weight: bold;
+}
+
+.pf-rv-items {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    margin-top: 1mm;
+}
+.pf-rv-items th {
+    border: 1pt solid #000;
+    background: #fff;
+    font-size: 8.5pt;
+    font-weight: bold;
+    padding: 1.4mm 1mm;
+    text-align: center;
+}
+.pf-rv-items td {
+    border-left: 1pt solid #000;
+    border-right: 1pt solid #000;
+    border-bottom: none;
+    border-top: none;
+    height: 6mm;
+    padding: .8mm 1mm;
+    font-size: 8.5pt;
+    vertical-align: top;
+}
+.pf-rv-items tbody tr:last-child td {
+    border-bottom: 1pt solid #000;
+}
+.pf-rv-items td.num,
+.pf-rv-items th.num { text-align: right; }
+.pf-rv-items td.wrap {
+    white-space: normal;
+    word-wrap: break-word;
+}
+
+/* Sign row: tall middle cell for stamp + sign above "Approved by" */
+.pf-rv-sign {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8mm;
+    table-layout: fixed;
+}
+.pf-rv-sign-col {
+    width: 33.33%;
+    text-align: center;
+    vertical-align: bottom;
+    padding: 0 3mm;
+}
+.pf-rv-sign-approved {
+    vertical-align: bottom;
+}
+.pf-rv-sign-space {
+    height: 18mm;
+}
+.pf-rv-sign-space-tall {
+    height: 28mm;
+}
+.pf-rv-sign-media {
+    width: auto;
+    margin: 0 auto 2mm;
+    border-collapse: collapse;
+}
+.pf-rv-sign-media-cell {
+    padding: 0 2mm;
+    vertical-align: middle;
+    text-align: center;
+    height: 28mm;
+}
+.pf-rv-stamp {
+    display: block;
+    width: 22mm;
+    height: 22mm;
+    border-radius: 50%;
+    object-fit: cover;
+}
+.pf-rv-sign-img {
+    display: block;
+    max-height: 16mm;
+    max-width: 40mm;
+    height: auto;
+    width: auto;
+}
+.pf-rv-sign-lbl {
+    margin-top: 1mm;
+    padding-top: 1.5mm;
+    border-top: 1pt solid #000;
+    font-size: 10pt;
+    font-style: italic;
+    font-family: "Times New Roman", Times, serif;
+}
+.pf-rv-note {
+    margin-top: 5mm;
+    text-align: center;
+    font-size: 9pt;
+    font-weight: bold;
+}
+.pf-rv-cont-head {
+    margin-bottom: 2mm;
+    font-size: 11pt;
+    font-weight: bold;
+    text-align: center;
+    text-decoration: underline;
+}
+.pf-rv-cont {
+    margin-top: 2mm;
+    font-size: 8.5pt;
+    font-style: italic;
+    color: #334155;
+}
+.pf-rv-body .pf-pageno {
+    margin-top: 2mm;
     font-size: 8pt;
     color: #475569;
 }

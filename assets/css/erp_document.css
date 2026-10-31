@@ -1965,7 +1965,8 @@ body.compact .doc-panel { padding: 10px 14px 12px; }
     .si02-grid > .si02-unit,
     .si02-grid > .si02-rate,
     .si02-grid > .si02-amt { grid-column: span 1; }
-    .si02-grid > .si02-disc { grid-column: span 2; }
+    .si02-grid > .si02-disc,
+    .si02-grid > .si02-vat { grid-column: span 2; }
     .si02-grid > .si02-net { grid-column: span 2; }
 }
 @media (min-width: 768px) and (max-width: 1099.98px) {

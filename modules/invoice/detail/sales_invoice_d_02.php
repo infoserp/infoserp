@@ -63,7 +63,6 @@ if (!function_exists('si02_line_card_html')) {
   <input type="hidden" name="account[]" value="' . si02_h($o['account'] ?? '') . '">
   <input type="hidden" name="excise_rate[]" value="0">
   <input type="hidden" name="excise_tax_amt[]" value="0">
-  <input type="hidden" name="vat[]" value="' . si02_h($o['vat_pct'] ?? '0') . '">
   <input type="hidden" name="item_remark[]" value="' . si02_h($remark) . '">
   <input type="hidden" name="line_no[]" value="' . si02_h($lineNo) . '">
 
@@ -110,9 +109,12 @@ if (!function_exists('si02_line_card_html')) {
         <input type="number" class="form-control form-control-sm detail-input si02-num" name="discount_amt[]" value="' . si02_h($o['discount_amt'] ?? '0.00') . '" step="0.01" placeholder="Amt" ' . $ro . '>
       </div>
     </div>
-    <div class="si02-field">
+    <div class="si02-field si02-vat">
       <label class="si02-lbl">VAT Amount</label>
-      <input type="text" class="form-control form-control-sm detail-input si02-ro si02-num" name="vat_amount[]" value="' . si02_h($o['vat_amount'] ?? '0.00') . '" readonly>
+      <div class="si02-disc-row">
+        <input type="number" class="form-control form-control-sm detail-input si02-num" name="vat[]" value="' . si02_h(number_format((float) ($o['vat_pct'] ?? 0), 2, '.', '')) . '" step="0.01" placeholder="%" ' . $ro . '>
+        <input type="text" class="form-control form-control-sm detail-input si02-ro si02-num" name="vat_amount[]" value="' . si02_h($o['vat_amount'] ?? '0.00') . '" placeholder="Amt" readonly>
+      </div>
     </div>
     <div class="si02-field si02-net">
       <label class="si02-lbl">Net Amount</label>
@@ -624,9 +626,14 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
         var amount = Math.max(0, roundMoney(lineTotal - discountAmt));
         setInputValue(row, 'total[]', amount, 2);
 
-        // Honour 0% VAT when header/apply sets it
+        // Honour 0% VAT when header/apply sets it; VAT % editable (same digit UX as Discount %)
         var vatEl = row.querySelector('input[name="vat[]"]');
         var vatPct = vatEl ? (parseFloat(vatEl.value) || 0) : VAT_PCT;
+        if (vatPct < 0) vatPct = 0;
+        // Do not reformat vat[] while the user is typing (siTypingBox / setInputValue guard)
+        if (vatEl !== siTypingBox) {
+            setInputValue(row, 'vat[]', vatPct, 2);
+        }
         var vatAmount = roundMoney((amount * vatPct) / 100);
         setInputValue(row, 'vat_amount[]', vatAmount, 2);
 
@@ -818,7 +825,6 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
             + '<input type="hidden" name="account[]" value="' + siEsc(DEFAULT_AC) + '">'
             + '<input type="hidden" name="excise_rate[]" value="0">'
             + '<input type="hidden" name="excise_tax_amt[]" value="0">'
-            + '<input type="hidden" name="vat[]" value="' + vatPct + '">'
             + '<input type="hidden" name="item_remark[]" value="' + siEsc(data.remark || '') + '">'
             + '<input type="hidden" name="line_no[]" value="' + lineNo + '">'
             + '<div class="si02-line-head"><div class="si02-line-meta">'
@@ -838,7 +844,9 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
             + '<div class="si02-field si02-disc"><label class="si02-lbl">Discount</label><div class="si02-disc-row">'
             + '<input type="number" class="form-control form-control-sm detail-input si02-num" name="discount_pct[]" value="0.00" step="0.01" placeholder="%">'
             + '<input type="number" class="form-control form-control-sm detail-input si02-num" name="discount_amt[]" value="0.00" step="0.01" placeholder="Amt"></div></div>'
-            + '<div class="si02-field"><label class="si02-lbl">VAT Amount</label><input type="text" class="form-control form-control-sm detail-input si02-ro si02-num" name="vat_amount[]" value="' + vatAmt.toFixed(2) + '" readonly></div>'
+            + '<div class="si02-field si02-vat"><label class="si02-lbl">VAT Amount</label><div class="si02-disc-row">'
+            + '<input type="number" class="form-control form-control-sm detail-input si02-num" name="vat[]" value="' + Number(vatPct).toFixed(2) + '" step="0.01" placeholder="%">'
+            + '<input type="text" class="form-control form-control-sm detail-input si02-ro si02-num" name="vat_amount[]" value="' + vatAmt.toFixed(2) + '" placeholder="Amt" readonly></div></div>'
             + '<div class="si02-field si02-net"><label class="si02-lbl">Net Amount</label>'
             + '<input type="text" class="form-control form-control-sm detail-input si-total si02-ro si02-num si02-net-inp" name="total_with_vat[]" value="' + net.toFixed(2) + '" readonly></div>'
             + '</div>'
@@ -964,7 +972,9 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
         updateSummary();
     });
 
-    var SI_DIGIT_DECIMALS = { 'qty[]': null, 'rate[]': null, 'discount_pct[]': 2, 'discount_amt[]': 2 };
+    // Same numbering UX as Discount %: clear 0.00 on focus, select non-zero (e.g. VAT 5.00)
+    // so typing replaces cleanly; format to fixed decimals only on blur.
+    var SI_DIGIT_DECIMALS = { 'qty[]': null, 'rate[]': null, 'discount_pct[]': 2, 'discount_amt[]': 2, 'vat[]': 2 };
     function isSiDigitBox(el) {
         return el && el.tagName === 'INPUT' && el.type === 'number' && !el.readOnly
             && SI_DIGIT_DECIMALS.hasOwnProperty(el.name) && el.closest('#detailTableBody');
@@ -976,6 +986,10 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
         if (el.value !== '' && (parseFloat(el.value) || 0) === 0) {
             el.dataset.zeroValue = el.value;
             el.value = '';
+        } else if (el.value !== '') {
+            setTimeout(function () {
+                try { el.select(); } catch (err) { /* ignore */ }
+            }, 0);
         }
     });
     document.addEventListener('focusout', function (e) {
