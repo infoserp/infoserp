@@ -119,7 +119,14 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_outstanding_invoices') {
                     ) AS balance,
                     0.000 AS applied_amount,
                     SPACE(1) AS posted,
-                    view_invoice_ledger.invoiceno
+                    view_invoice_ledger.invoiceno,
+                    ISNULL((
+                        SELECT MAX(NULLIF(LTRIM(RTRIM(d.job_no)), ''))
+                        FROM invoice_d d
+                        WHERE d.company_code = view_invoice_ledger.companycode
+                          AND d.doc_no = view_invoice_ledger.invoiceno
+                          AND d.branch_code LIKE ?
+                    ), '') AS job_no
                 FROM view_invoice_ledger
                 WHERE view_invoice_ledger.companycode = ?
                   AND view_invoice_ledger.branchcode LIKE ?
@@ -134,13 +141,14 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_outstanding_invoices') {
 
         $stmt = $con->prepare($sql);
         $branch_pattern = $branch_code . '%';
-        $stmt->execute([$company_code, $branch_pattern, $ref_ac_code]);
+        $stmt->execute([$branch_pattern, $company_code, $branch_pattern, $ref_ac_code]);
 
         $invoices = [];
         while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
             $invoices[] = [
                 'invoiceno'      => trim($row['invoiceno'] ?? ''),
                 'invoicedate'    => trim($row['invoicedate'] ?? ''),
+                'job_no'         => trim($row['job_no'] ?? ''),
                 'debit'          => (float)($row['debit'] ?? 0),
                 'credit'         => (float)($row['credit'] ?? 0),
                 'balance'        => (float)($row['balance'] ?? 0),
@@ -1061,6 +1069,7 @@ $rv_self_url = '/' . ltrim(
                             <input type="checkbox" class="invoice-checkbox" 
                                    data-invoiceno="${htmlEscape(invoice.invoiceno)}"
                                    data-invoicedate="${htmlEscape(invoice.invoicedate)}"
+                                   data-jobno="${htmlEscape(invoice.job_no || '')}"
                                    data-balance="${balanceAmount}"
                                    value="${index}"
                                    onchange="syncSelectAllInvoices()">
@@ -1114,6 +1123,7 @@ $rv_self_url = '/' . ltrim(
             selectedInvoices.push({
                 invoiceno: invoiceNo,
                 invoicedate: checkbox.getAttribute('data-invoicedate') || '',
+                job_no: checkbox.getAttribute('data-jobno') || '',
                 applied_amount: appliedAmount,
                 // no Applied Amount entered → receive the full balance
                 amount: appliedAmount > 0 ? appliedAmount : (parseFloat(checkbox.getAttribute('data-balance')) || 0)

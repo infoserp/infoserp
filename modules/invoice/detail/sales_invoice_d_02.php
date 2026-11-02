@@ -811,14 +811,35 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
         closeItemSearch();
     }
 
+    /** Resolve discount for a called qty: prefer %, else scale amount by source qty. VAT always recalc. */
+    function siResolveCallDiscount(qty, rate, discPct, discAmt, sourceQty) {
+        qty = Number(qty) || 0;
+        rate = Number(rate) || 0;
+        discPct = Number(discPct) || 0;
+        discAmt = Number(discAmt) || 0;
+        sourceQty = Number(sourceQty) || 0;
+        var gross = Math.round((qty * rate + Number.EPSILON) * 100) / 100;
+        if (discPct > 0) {
+            discPct = Math.min(discPct, 100);
+            discAmt = Math.round((gross * discPct / 100 + Number.EPSILON) * 100) / 100;
+        } else if (sourceQty > 0 && Math.abs(sourceQty - qty) > 0.0001) {
+            discAmt = Math.round((discAmt * qty / sourceQty + Number.EPSILON) * 100) / 100;
+        }
+        discAmt = Math.min(Math.max(0, discAmt), gross);
+        return { pct: discPct, amt: discAmt, gross: gross };
+    }
+
     function siBuildJobLineHtml(data) {
         var lid = 'line_job_' + Date.now() + '_' + Math.floor(Math.random() * 9000 + 1000);
         var qty = Number(data.qty || 0);
         var rate = Number(data.rate || 0);
         var vatPct = (data.vat != null && data.vat !== '') ? Number(data.vat) : VAT_PCT;
-        var amount = Math.round((qty * rate + Number.EPSILON) * 100) / 100;
-        var vatAmt = Math.round((amount * vatPct / 100 + Number.EPSILON) * 100) / 100;
-        var net = Math.round((amount + vatAmt + Number.EPSILON) * 100) / 100;
+        var disc = siResolveCallDiscount(qty, rate, data.discount_pct, data.discount_amt, data.source_qty);
+        var discPct = disc.pct;
+        var discAmt = disc.amt;
+        var afterDisc = Math.max(0, disc.gross - discAmt);
+        var vatAmt = Math.round((afterDisc * vatPct / 100 + Number.EPSILON) * 100) / 100;
+        var net = Math.round((afterDisc + vatAmt + Number.EPSILON) * 100) / 100;
         var lineNo = siEsc(data.item_no || '1');
         return '<article class="detail-row si02-line" data-line-id="' + lid + '" data-job-item="' + siEsc(data.item_no || '') + '">'
             + '<input type="hidden" name="line_id[]" value="' + lid + '">'
@@ -840,10 +861,10 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
             + '<div class="si02-field si02-qty"><label class="si02-lbl">Qty</label><input type="number" class="form-control form-control-sm detail-input si02-num" name="qty[]" value="' + qty + '"></div>'
             + '<div class="si02-field si02-unit"><label class="si02-lbl">Unit</label><input type="text" class="form-control form-control-sm detail-input si02-ro" name="unit[]" value="' + siEsc(data.unit || '') + '" readonly></div>'
             + '<div class="si02-field si02-rate"><label class="si02-lbl">Rate</label><input type="number" class="form-control form-control-sm detail-input si02-num" name="rate[]" value="' + rate.toFixed(2) + '" step="0.01"></div>'
-            + '<div class="si02-field si02-amt"><label class="si02-lbl">Amount</label><input type="text" class="form-control form-control-sm detail-input si-amount si02-ro si02-num" name="total[]" value="' + amount.toFixed(2) + '" readonly></div>'
+            + '<div class="si02-field si02-amt"><label class="si02-lbl">Amount</label><input type="text" class="form-control form-control-sm detail-input si-amount si02-ro si02-num" name="total[]" value="' + afterDisc.toFixed(2) + '" readonly></div>'
             + '<div class="si02-field si02-disc"><label class="si02-lbl">Discount</label><div class="si02-disc-row">'
-            + '<input type="number" class="form-control form-control-sm detail-input si02-num" name="discount_pct[]" value="0.00" step="0.01" placeholder="%">'
-            + '<input type="number" class="form-control form-control-sm detail-input si02-num" name="discount_amt[]" value="0.00" step="0.01" placeholder="Amt"></div></div>'
+            + '<input type="number" class="form-control form-control-sm detail-input si02-num" name="discount_pct[]" value="' + discPct.toFixed(2) + '" step="0.01" placeholder="%">'
+            + '<input type="number" class="form-control form-control-sm detail-input si02-num" name="discount_amt[]" value="' + discAmt.toFixed(2) + '" step="0.01" placeholder="Amt"></div></div>'
             + '<div class="si02-field si02-vat"><label class="si02-lbl">VAT Amount</label><div class="si02-disc-row">'
             + '<input type="number" class="form-control form-control-sm detail-input si02-num" name="vat[]" value="' + Number(vatPct).toFixed(2) + '" step="0.01" placeholder="%">'
             + '<input type="text" class="form-control form-control-sm detail-input si02-ro si02-num" name="vat_amount[]" value="' + vatAmt.toFixed(2) + '" placeholder="Amt" readonly></div></div>'
@@ -892,10 +913,17 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
                 var rateEl = existing.querySelector('input[name="rate[]"]');
                 var unitEl = existing.querySelector('input[name="unit[]"]');
                 var descEl = existing.querySelector('textarea[name="item_desc[]"], input[name="item_desc[]"]');
+                var discPctEl = existing.querySelector('input[name="discount_pct[]"]');
+                var discAmtEl = existing.querySelector('input[name="discount_amt[]"]');
+                var vatEl = existing.querySelector('input[name="vat[]"]');
+                var disc = siResolveCallDiscount(p.qty, p.rate, p.discount_pct, p.discount_amt, p.source_qty);
                 if (qtyEl) qtyEl.value = p.qty;
                 if (rateEl) rateEl.value = Number(p.rate || 0).toFixed(2);
                 if (unitEl) unitEl.value = p.unit || '';
                 if (descEl && (p.item_desc || '')) descEl.value = p.item_desc;
+                if (discPctEl) discPctEl.value = disc.pct.toFixed(2);
+                if (discAmtEl) discAmtEl.value = disc.amt.toFixed(2);
+                if (vatEl && p.vat != null && p.vat !== '') vatEl.value = Number(p.vat).toFixed(2);
                 var remEl = existing.querySelector('input[name="item_remark[]"]');
                 var remPrev = existing.querySelector('.si02-remark-preview');
                 var qtnEl = existing.querySelector('input[name="line_qtn_no[]"]');
@@ -904,7 +932,7 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
                     if (remPrev) remPrev.value = p.remark || '';
                 }
                 if (qtnEl && (p.qtn_no || '') !== '') qtnEl.value = p.qtn_no || '';
-                recalcRow(existing);
+                recalcRow(existing, disc.pct > 0 ? 'discount_pct[]' : 'discount_amt[]');
                 return;
             }
             tbody.insertAdjacentHTML('beforeend', siBuildJobLineHtml(p));

@@ -739,6 +739,24 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
         closeItemSearch();
     }
 
+    /** Resolve discount for a called qty: prefer %, else scale amount by source qty. VAT always recalc. */
+    function jcResolveCallDiscount(qty, rate, discPct, discAmt, sourceQty) {
+        qty = Number(qty) || 0;
+        rate = Number(rate) || 0;
+        discPct = Number(discPct) || 0;
+        discAmt = Number(discAmt) || 0;
+        sourceQty = Number(sourceQty) || 0;
+        var gross = Math.round((qty * rate + Number.EPSILON) * 100) / 100;
+        if (discPct > 0) {
+            discPct = Math.min(discPct, 100);
+            discAmt = Math.round((gross * discPct / 100 + Number.EPSILON) * 100) / 100;
+        } else if (sourceQty > 0 && Math.abs(sourceQty - qty) > 0.0001) {
+            discAmt = Math.round((discAmt * qty / sourceQty + Number.EPSILON) * 100) / 100;
+        }
+        discAmt = Math.min(Math.max(0, discAmt), gross);
+        return { pct: discPct, amt: discAmt, gross: gross };
+    }
+
     function jcBuildLineHtml(data, srl, lineNo) {
         var lid = 'line_qtn_' + Date.now() + '_' + Math.floor(Math.random() * 9000 + 1000);
         var srlPad = String(srl).padStart(4, '0');
@@ -746,9 +764,10 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
         var qty = Number(data.qty || 0);
         var rate = Number(data.rate || 0);
         var vatPct = (data.vat != null && data.vat !== '') ? Number(data.vat) : VAT_PCT;
-        var discPct = 0;
-        var discAmt = 0;
-        var gross = Math.round((qty * rate + Number.EPSILON) * 100) / 100;
+        var disc = jcResolveCallDiscount(qty, rate, data.discount_pct, data.discount_amt, data.source_qty);
+        var discPct = disc.pct;
+        var discAmt = disc.amt;
+        var gross = disc.gross;
         var vatAmt = Math.round(((Math.max(0, gross - discAmt) * vatPct) / 100 + Number.EPSILON) * 100) / 100;
         var net = Math.round((gross - discAmt + vatAmt + Number.EPSILON) * 100) / 100;
         return '<tr data-line-id="' + lid + '" class="detail-row">'
@@ -762,8 +781,8 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
             + '<td data-label="Unit"><select class="form-control form-control-sm detail-input text-center" name="unit[]">' + jcUnitOptions(unit) + '</select></td>'
             + '<td data-label="Rate"><input type="number" class="form-control form-control-sm detail-input" name="rate[]" value="' + rate.toFixed(2) + '" step="0.01" style="text-align:right;"></td>'
             + '<td data-label="Discount"><div class="detail-split-inputs">'
-            + '<input type="number" class="form-control form-control-sm detail-input" name="discount_pct[]" value="0.00" step="0.01" style="text-align:center;">'
-            + '<input type="number" class="form-control form-control-sm detail-input" name="discount_amt[]" value="0.00" step="0.01" style="text-align:right;">'
+            + '<input type="number" class="form-control form-control-sm detail-input" name="discount_pct[]" value="' + discPct.toFixed(2) + '" step="0.01" style="text-align:center;">'
+            + '<input type="number" class="form-control form-control-sm detail-input" name="discount_amt[]" value="' + discAmt.toFixed(2) + '" step="0.01" style="text-align:right;">'
             + '</div></td>'
             + '<td data-label="VAT Amt"><input type="hidden" name="vat[]" value="' + vatPct + '">'
             + '<input type="text" class="form-control form-control-sm detail-input" name="vat_amount[]" value="' + vatAmt.toFixed(2) + '" readonly style="text-align:right;"></td>'
@@ -814,11 +833,21 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
                 var unitEl = existing.querySelector('select[name="unit[]"]');
                 var remEl = existing.querySelector('input[name="item_remark[]"]');
                 var descElUp = existing.querySelector('textarea[name="item_desc[]"], input[name="item_desc[]"]');
+                var discPctEl = existing.querySelector('input[name="discount_pct[]"]');
+                var discAmtEl = existing.querySelector('input[name="discount_amt[]"]');
+                var vatEl = existing.querySelector('input[name="vat[]"]');
+                var disc = jcResolveCallDiscount(p.qty, p.rate, p.discount_pct, p.discount_amt, p.source_qty);
                 if (qtyEl) qtyEl.value = p.qty;
                 if (rateEl) rateEl.value = Number(p.rate || 0).toFixed(2);
                 if (unitEl) unitEl.innerHTML = jcUnitOptions(p.unit || '');
                 if (descElUp && (p.item_desc || '')) descElUp.value = p.item_desc;
                 if (remEl && (p.remark || '') !== '') remEl.value = p.remark || '';
+                if (discPctEl) discPctEl.value = disc.pct.toFixed(2);
+                if (discAmtEl) discAmtEl.value = disc.amt.toFixed(2);
+                if (vatEl && p.vat != null && p.vat !== '') vatEl.value = p.vat;
+                if (typeof recalcRow === 'function') {
+                    recalcRow(existing, disc.pct > 0 ? 'discount_pct[]' : 'discount_amt[]');
+                }
                 return;
             }
             var next = tbody.querySelectorAll('tr.detail-row').length + 1;

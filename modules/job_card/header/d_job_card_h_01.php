@@ -131,6 +131,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($jc_ajax === 'jc_pending_qtns' || 
                         MAX(sales_quotation_d.serial_no) AS serialno,
                         MAX(ISNULL(sales_quotation_d.trans_rate, sales_quotation_d.item_rate)) AS rate,
                         MAX(ISNULL(sales_quotation_d.tax1_percent, 0)) AS tax1_percent,
+                        MAX(ISNULL(sales_quotation_d.discount_percent, 0)) AS discount_percent,
+                        MAX(ISNULL(sales_quotation_d.discount_amount, 0)) AS discount_amount,
+                        MAX(ISNULL(sales_quotation_d.trans_qty, sales_quotation_d.item_qty)) AS source_qty,
                         MAX(CAST(sales_quotation_d.remark AS NVARCHAR(MAX))) AS remark
                  FROM view_qtn_jc_balance, sales_quotation_d
                  WHERE (view_qtn_jc_balance.companycode = sales_quotation_d.company_code)
@@ -155,16 +158,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($jc_ajax === 'jc_pending_qtns' || 
             $items = [];
             while ($r = $stmt->fetch(PDO::FETCH_ASSOC)) {
                 $items[] = [
-                    'doc_no'    => $jc_enc($r['docno']),
-                    'item_no'   => $jc_enc($r['itemno']),
-                    'item_code' => $jc_enc($r['itemcode']),
-                    'item_name' => $jc_enc($r['itemname']),
-                    'unit'      => $jc_enc($r['unit']),
-                    'balance'   => (float) $r['txnqty'],
-                    'rate'      => (float) ($r['rate'] ?? 0),
-                    'vat'       => (float) ($r['tax1_percent'] ?? 0),
-                    'serial_no' => $jc_enc($r['serialno'] ?? ''),
-                    'remark'    => $jc_enc($r['remark'] ?? ''),
+                    'doc_no'       => $jc_enc($r['docno']),
+                    'item_no'      => $jc_enc($r['itemno']),
+                    'item_code'    => $jc_enc($r['itemcode']),
+                    'item_name'    => $jc_enc($r['itemname']),
+                    'unit'         => $jc_enc($r['unit']),
+                    'balance'      => (float) $r['txnqty'],
+                    'rate'         => (float) ($r['rate'] ?? 0),
+                    'vat'          => (float) ($r['tax1_percent'] ?? 0),
+                    'discount_pct' => (float) ($r['discount_percent'] ?? 0),
+                    'discount_amt' => (float) ($r['discount_amount'] ?? 0),
+                    'source_qty'   => (float) ($r['source_qty'] ?? 0),
+                    'serial_no'    => $jc_enc($r['serialno'] ?? ''),
+                    'remark'       => $jc_enc($r['remark'] ?? ''),
                 ];
             }
             echo json_encode(['header' => $header, 'items' => $items]);
@@ -1449,6 +1455,9 @@ $jc_self_url = '/' . ltrim(
                 qty: qty,
                 rate: item.rate || 0,
                 vat: item.vat || 0,
+                discount_pct: item.discount_pct || 0,
+                discount_amt: item.discount_amt || 0,
+                source_qty: item.source_qty || 0,
                 remark: item.remark || '',
                 quotation_no: item.doc_no || (jcQtnDoc ? jcQtnDoc.doc_no : '')
             });

@@ -1049,31 +1049,39 @@ html body.erp-print-page {
 }
 
 /* ---------------------------- Receipt Voucher (pf-rv) ---------------------------- */
+/* Full-bleed letter header / footer — same widths as SI / SQ (210mm) */
 .erp-print-sheet.pf-rv-sheet {
-    display: table;
-    table-layout: fixed;
-    overflow: hidden;
+    padding: 0;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
 }
 .erp-print-pdf .erp-print-sheet.pf-rv-sheet {
-    page-break-after: always;
+    width: 210mm;
+    height: 296mm;
 }
-.pf-rv-head,
+.pf-rv-head {
+    height: 38mm;
+    overflow: hidden;
+}
 .pf-rv-foot {
-    display: table-row;
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: 210mm;
+    height: 22mm;
+    overflow: hidden;
 }
 .pf-rv-head img,
 .pf-rv-foot img {
     display: block;
-    width: 100%;
-    object-fit: cover;
+    width: 210mm;
+    height: 100%;
 }
 .pf-rv-head img { height: 38mm; }
 .pf-rv-foot img { height: 22mm; }
 .pf-rv-body {
-    display: table-cell;
-    vertical-align: top;
-    padding: 4mm 10mm 3mm;
-    height: 100%;
+    /* Keep body clear of the fixed 22mm letter-footer band */
+    padding: 4mm 10mm 24mm;
 }
 
 .pf-rv-frame {

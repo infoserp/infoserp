@@ -691,15 +691,34 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
             .replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
 
+    /** Resolve discount for a called qty: prefer %, else scale amount by source qty. VAT always recalc. */
+    function siResolveCallDiscount(qty, rate, discPct, discAmt, sourceQty) {
+        qty = Number(qty) || 0;
+        rate = Number(rate) || 0;
+        discPct = Number(discPct) || 0;
+        discAmt = Number(discAmt) || 0;
+        sourceQty = Number(sourceQty) || 0;
+        var gross = Math.round((qty * rate + Number.EPSILON) * 100) / 100;
+        if (discPct > 0) {
+            discPct = Math.min(discPct, 100);
+            discAmt = Math.round((gross * discPct / 100 + Number.EPSILON) * 100) / 100;
+        } else if (sourceQty > 0 && Math.abs(sourceQty - qty) > 0.0001) {
+            discAmt = Math.round((discAmt * qty / sourceQty + Number.EPSILON) * 100) / 100;
+        }
+        discAmt = Math.min(Math.max(0, discAmt), gross);
+        return { pct: discPct, amt: discAmt, gross: gross };
+    }
+
     function siBuildJobLineHtml(data) {
         var lid = 'line_job_' + Date.now() + '_' + Math.floor(Math.random() * 9000 + 1000);
         var qty = Number(data.qty || 0);
         var rate = Number(data.rate || 0);
         var vatPct = (data.vat != null && data.vat !== '') ? Number(data.vat) : VAT_PCT;
-        var discAmt = 0;
+        var disc = siResolveCallDiscount(qty, rate, data.discount_pct, data.discount_amt, data.source_qty);
+        var discPct = disc.pct;
+        var discAmt = disc.amt;
         var excise = 0;
-        var gross = Math.round((qty * rate - discAmt + Number.EPSILON) * 100) / 100;
-        var amount = Math.round((gross + excise + Number.EPSILON) * 100) / 100;
+        var amount = Math.round((Math.max(0, disc.gross - discAmt) + excise + Number.EPSILON) * 100) / 100;
         var vatAmt = Math.round((amount * vatPct / 100 + Number.EPSILON) * 100) / 100;
         var totalVat = Math.round((amount + vatAmt + Number.EPSILON) * 100) / 100;
         var descRo = '';
@@ -715,8 +734,8 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
             + '<td><input type="number" class="form-control form-control-sm detail-input" name="qty[]" value="' + qty + '" style="text-align:right;"></td>'
             + '<td><input type="number" class="form-control form-control-sm detail-input" name="rate[]" value="' + rate.toFixed(2) + '" step="0.01" style="text-align:right;"></td>'
             + '<td><div class="detail-split-inputs">'
-            + '<input type="number" class="form-control form-control-sm detail-input" name="discount_pct[]" value="0.00" step="0.01" style="text-align:center;">'
-            + '<input type="number" class="form-control form-control-sm detail-input" name="discount_amt[]" value="0.00" step="0.01" style="text-align:right;">'
+            + '<input type="number" class="form-control form-control-sm detail-input" name="discount_pct[]" value="' + discPct.toFixed(2) + '" step="0.01" style="text-align:center;">'
+            + '<input type="number" class="form-control form-control-sm detail-input" name="discount_amt[]" value="' + discAmt.toFixed(2) + '" step="0.01" style="text-align:right;">'
             + '</div></td>'
             + '<td><div class="detail-split-inputs si-excise">'
             + '<input type="number" class="form-control form-control-sm detail-input" name="excise_rate[]" value="0" step="0.01" style="text-align:right;">'
@@ -764,11 +783,18 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
                 var rateEl = existing.querySelector('input[name="rate[]"]');
                 var unitEl = existing.querySelector('input[name="unit[]"]');
                 var descEl = existing.querySelector('[name="item_desc[]"]');
+                var discPctEl = existing.querySelector('input[name="discount_pct[]"]');
+                var discAmtEl = existing.querySelector('input[name="discount_amt[]"]');
+                var vatEl = existing.querySelector('input[name="vat[]"]');
+                var disc = siResolveCallDiscount(p.qty, p.rate, p.discount_pct, p.discount_amt, p.source_qty);
                 if (qtyEl) qtyEl.value = p.qty;
                 if (rateEl) rateEl.value = Number(p.rate || 0).toFixed(2);
                 if (unitEl) unitEl.value = p.unit || '';
                 if (descEl && (p.item_desc || '')) descEl.value = p.item_desc;
-                recalcRow(existing);
+                if (discPctEl) discPctEl.value = disc.pct.toFixed(2);
+                if (discAmtEl) discAmtEl.value = disc.amt.toFixed(2);
+                if (vatEl && p.vat != null && p.vat !== '') vatEl.value = p.vat;
+                recalcRow(existing, disc.pct > 0 ? 'discount_pct[]' : 'discount_amt[]');
                 return;
             }
             tbody.insertAdjacentHTML('beforeend', siBuildJobLineHtml(p));

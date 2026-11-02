@@ -1591,6 +1591,30 @@ body.compact .doc-panel { padding: 10px 14px 12px; }
 }
 #rvdGrid td.rvd-del-cell { text-align: center; }
 #rvdGrid td.rvd-del-cell .rvd-del { margin: 0 auto; }
+#rvdGrid td.rvd-nar-cell {
+    width: 56px;
+    min-width: 56px;
+    max-width: 64px;
+    text-align: center;
+    padding-left: 2px;
+    padding-right: 2px;
+}
+#rvdGrid .rvd-nar-only {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0;
+}
+#rvdGrid .rvd-nar-only .detail-more {
+    margin: 0;
+    padding: 2px 6px;
+    font-size: 11px;
+    white-space: nowrap;
+}
+#rvdGrid select[data-f="job_no"] {
+    min-width: 0;
+    width: 100%;
+}
 
 /* stock quantity highlight */
 .detail-table input.stock-input {
@@ -2268,7 +2292,8 @@ body.compact .doc-panel { padding: 10px 14px 12px; }
     .detail-table#rvdGrid tr.detail-row > td:nth-child(6)::before { content: 'Credit'; }
     .detail-table#rvdGrid tr.detail-row > td:nth-child(7)::before { content: 'INV. No'; }
     .detail-table#rvdGrid tr.detail-row > td:nth-child(8)::before { content: 'INV Date'; }
-    .detail-table#rvdGrid tr.detail-row > td:nth-child(9)::before { content: 'Salesman'; }
+    .detail-table#rvdGrid tr.detail-row > td:nth-child(9)::before { content: 'Job No.'; }
+    .detail-table#rvdGrid tr.detail-row > td:nth-child(10)::before { content: 'Salesman'; }
 }
 
 /* tablet: two fields side by side; title, code and description use the full card width */

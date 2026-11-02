@@ -125,6 +125,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($si_ajax === 'si_pending_jobs' || 
                         view_jc_si_balance.itemname,
                         MAX(ISNULL(job_card_d.trans_rate, job_card_d.item_rate)) AS rate,
                         MAX(ISNULL(job_card_d.tax1_percent, 0)) AS tax1_percent,
+                        MAX(ISNULL(job_card_d.discount_percent, 0)) AS discount_percent,
+                        MAX(ISNULL(job_card_d.discount_amount, 0)) AS discount_amount,
+                        MAX(ISNULL(job_card_d.trans_qty, job_card_d.item_qty)) AS source_qty,
                         MAX(CAST(job_card_d.remark AS NVARCHAR(MAX))) AS remark,
                         MAX(ISNULL(job_card_d.quotation_no, '')) AS quotation_no
                  FROM view_jc_si_balance
@@ -149,16 +152,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($si_ajax === 'si_pending_jobs' || 
             $items = [];
             while ($r = $stmt->fetch(PDO::FETCH_ASSOC)) {
                 $items[] = [
-                    'doc_no'    => $si_enc($r['docno']),
-                    'item_no'   => $si_enc($r['itemno']),
-                    'item_code' => $si_enc($r['itemcode']),
-                    'item_name' => $si_enc($r['itemname']),
-                    'unit'      => $si_enc($r['unit']),
-                    'balance'   => (float) $r['txnqty'],
-                    'rate'      => (float) ($r['rate'] ?? 0),
-                    'vat'       => (float) ($r['tax1_percent'] ?? 0),
-                    'remark'    => $si_enc($r['remark'] ?? ''),
-                    'qtn_no'    => $si_enc($r['quotation_no'] ?? ''),
+                    'doc_no'       => $si_enc($r['docno']),
+                    'item_no'      => $si_enc($r['itemno']),
+                    'item_code'    => $si_enc($r['itemcode']),
+                    'item_name'    => $si_enc($r['itemname']),
+                    'unit'         => $si_enc($r['unit']),
+                    'balance'      => (float) $r['txnqty'],
+                    'rate'         => (float) ($r['rate'] ?? 0),
+                    'vat'          => (float) ($r['tax1_percent'] ?? 0),
+                    'discount_pct' => (float) ($r['discount_percent'] ?? 0),
+                    'discount_amt' => (float) ($r['discount_amount'] ?? 0),
+                    'source_qty'   => (float) ($r['source_qty'] ?? 0),
+                    'remark'       => $si_enc($r['remark'] ?? ''),
+                    'qtn_no'       => $si_enc($r['quotation_no'] ?? ''),
                 ];
             }
             echo json_encode(['header' => $header, 'items' => $items]);
@@ -2138,6 +2144,9 @@ $si_self_url = '/' . ltrim(
                 qty: qty,
                 rate: item.rate || 0,
                 vat: item.vat || 0,
+                discount_pct: item.discount_pct || 0,
+                discount_amt: item.discount_amt || 0,
+                source_qty: item.source_qty || 0,
                 remark: item.remark || '',
                 qtn_no: item.qtn_no || hdrQtn || '',
                 job_no: item.doc_no || (siJobDoc ? siJobDoc.doc_no : '')

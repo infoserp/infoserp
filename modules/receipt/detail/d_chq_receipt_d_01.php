@@ -12,8 +12,8 @@ if (!isset($con)) {
 $rvd_company_code = $_SESSION['company_code'] ?? '';
 $rvd_branch_code  = $_SESSION['branch_code']  ?? '';
 
-// AJAX Handler: Job No lookup
-if (isset($_GET['action']) && $_GET['action'] === 'rvd_search_jobs') {
+// AJAX Handler: Job No lookup (by Ref. Name ac_code — job_card + invoice_d)
+if (isset($_GET['action']) && ($_GET['action'] === 'rvd_search_jobs' || $_GET['action'] === 'rvd_jobs_by_ac')) {
     while (ob_get_level() > 0) {
         ob_end_clean();
     }
@@ -24,17 +24,43 @@ if (isset($_GET['action']) && $_GET['action'] === 'rvd_search_jobs') {
         exit;
     }
     try {
-        $term = '%' . trim($_GET['term'] ?? '') . '%';
-        $stmt = $con->prepare(
-            "SELECT TOP 200 job_no, ISNULL(job_name, '') AS job_name
-             FROM job_master
-             WHERE company_code = ? AND branch_code = ? AND (job_no LIKE ? OR job_name LIKE ?)
-             ORDER BY job_no DESC"
-        );
-        $stmt->execute([$rvd_company_code, $rvd_branch_code, $term, $term]);
+        $ac = trim($_GET['ac_code'] ?? '');
         $jobs = [];
-        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-            $jobs[] = ['job_no' => trim($row['job_no']), 'job_name' => trim($row['job_name'])];
+        if ($ac !== '') {
+            $stmt = $con->prepare(
+                "SELECT DISTINCT job_no FROM (
+                    SELECT LTRIM(RTRIM(jh.doc_no)) AS job_no
+                    FROM job_card_h jh
+                    WHERE jh.company_code = ?
+                      AND jh.branch_code LIKE ?
+                      AND jh.ac_code = ?
+                      AND ISNULL(jh.cancelled, 'N') = 'N'
+                      AND LTRIM(RTRIM(ISNULL(jh.doc_no, ''))) <> ''
+                    UNION
+                    SELECT LTRIM(RTRIM(d.job_no)) AS job_no
+                    FROM invoice_d d
+                    INNER JOIN invoice_h h
+                      ON h.company_code = d.company_code
+                     AND h.branch_code = d.branch_code
+                     AND h.doc_no = d.doc_no
+                    WHERE d.company_code = ?
+                      AND d.branch_code LIKE ?
+                      AND h.ac_code = ?
+                      AND LTRIM(RTRIM(ISNULL(d.job_no, ''))) <> ''
+                 ) x
+                 ORDER BY job_no DESC"
+            );
+            $branch_like = $rvd_branch_code . '%';
+            $stmt->execute([
+                $rvd_company_code, $branch_like, $ac,
+                $rvd_company_code, $branch_like, $ac,
+            ]);
+            while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                $jn = trim((string) ($row['job_no'] ?? ''));
+                if ($jn !== '') {
+                    $jobs[] = ['job_no' => $jn, 'job_name' => ''];
+                }
+            }
         }
         echo json_encode($jobs);
     } catch (Exception $e) {
@@ -47,6 +73,50 @@ if (isset($_GET['action']) && $_GET['action'] === 'rvd_search_jobs') {
 
 $rvd_view_mode = !empty($is_view_mode);
 $rvd_doc_no    = isset($doc_no) ? trim((string) $doc_no) : '';
+$rvd_ref_ac    = isset($ref_code) ? trim((string) $ref_code) : '';
+
+// Job Nos related to current Ref. Name ac_code (for dropdown)
+$rvd_jobs = [];
+if ($rvd_ref_ac !== '') {
+    try {
+        $stmt_j = $con->prepare(
+            "SELECT DISTINCT job_no FROM (
+                SELECT LTRIM(RTRIM(jh.doc_no)) AS job_no
+                FROM job_card_h jh
+                WHERE jh.company_code = ?
+                  AND jh.branch_code LIKE ?
+                  AND jh.ac_code = ?
+                  AND ISNULL(jh.cancelled, 'N') = 'N'
+                  AND LTRIM(RTRIM(ISNULL(jh.doc_no, ''))) <> ''
+                UNION
+                SELECT LTRIM(RTRIM(d.job_no)) AS job_no
+                FROM invoice_d d
+                INNER JOIN invoice_h h
+                  ON h.company_code = d.company_code
+                 AND h.branch_code = d.branch_code
+                 AND h.doc_no = d.doc_no
+                WHERE d.company_code = ?
+                  AND d.branch_code LIKE ?
+                  AND h.ac_code = ?
+                  AND LTRIM(RTRIM(ISNULL(d.job_no, ''))) <> ''
+             ) x
+             ORDER BY job_no DESC"
+        );
+        $branch_like_j = $rvd_branch_code . '%';
+        $stmt_j->execute([
+            $rvd_company_code, $branch_like_j, $rvd_ref_ac,
+            $rvd_company_code, $branch_like_j, $rvd_ref_ac,
+        ]);
+        while ($row = $stmt_j->fetch(PDO::FETCH_ASSOC)) {
+            $jn = trim((string) ($row['job_no'] ?? ''));
+            if ($jn !== '') {
+                $rvd_jobs[] = ['job_no' => $jn];
+            }
+        }
+    } catch (Exception $e) {
+        error_log('Receipt detail jobs-by-ac fetch error: ' . $e->getMessage());
+    }
+}
 
 // Saved lines of the loaded document
 $rvd_lines = [];
@@ -130,12 +200,13 @@ $rvd_self_url = '/' . ltrim(
                     <col style="width:44px;">
                     <col style="width:80px;">
                     <col>
-                    <col style="width:170px;">
+                    <col style="width:56px;">
                     <col style="width:84px;">
                     <col style="width:84px;">
+                    <col style="width:120px;">
+                    <col style="width:110px;">
+                    <col style="width:110px;">
                     <col style="width:130px;">
-                    <col style="width:130px;">
-                    <col style="width:140px;">
                     <col style="width:36px;">
                 </colgroup>
                 <thead>
@@ -143,18 +214,19 @@ $rvd_self_url = '/' . ltrim(
                         <th>No</th>
                         <th>Code</th>
                         <th>Account Description</th>
-                        <th>Narration</th>
+                        <th>Nar.</th>
                         <th>Debit</th>
                         <th>Credit</th>
                         <th>INV. No</th>
                         <th>INV Date</th>
+                        <th>Job No.</th>
                         <th>Salesman</th>
                         <th></th>
                     </tr>
                 </thead>
                 <tbody id="rvdEmpty" style="display:none;">
                     <tr>
-                        <td colspan="10" class="empty-state">
+                        <td colspan="11" class="empty-state">
                             <i class="fa fa-inbox"></i>
                             <p>No account lines</p>
                         </td>
@@ -232,6 +304,7 @@ $rvd_self_url = '/' . ltrim(
     var RVD_HEADER_SELF   = (typeof _rvHeaderSelf !== 'undefined') ? _rvHeaderSelf : '';
     var RVD_LINES         = <?php echo json_encode($rvd_lines); ?>;
     var RVD_SALESMEN      = <?php echo json_encode($rvd_salesmen); ?>;
+    var RVD_JOBS          = <?php echo json_encode($rvd_jobs); ?>;
     var RVD_DEFAULT_SALESMAN = <?php echo json_encode(isset($salesman_code) ? (string) $salesman_code : ''); ?>;
     var rvdEditable       = <?php echo $rvd_view_mode ? 'false' : 'true'; ?>;
 
@@ -269,22 +342,80 @@ $rvd_self_url = '/' . ltrim(
         return html;
     }
 
+    function rvdJobOptions(selected) {
+        var html = '<option value=""></option>';
+        var found = false;
+        (RVD_JOBS || []).forEach(function (j) {
+            var code = j.job_no || j;
+            var sel = (String(code) === String(selected || ''));
+            if (sel) found = true;
+            html += '<option value="' + rvdEsc(code) + '"' + (sel ? ' selected' : '') + '>' + rvdEsc(code) + '</option>';
+        });
+        if (selected && !found) {
+            html += '<option value="' + rvdEsc(selected) + '" selected>' + rvdEsc(selected) + '</option>';
+        }
+        return html;
+    }
+
+    function rvdSetJobSelect(lineEl, selected) {
+        var el = rvdField(lineEl, 'job_no');
+        if (!el || el.tagName !== 'SELECT') return;
+        el.innerHTML = rvdJobOptions(selected || '');
+        if (selected) el.value = selected;
+    }
+
+    function rvdRefreshJobOptions(selectedMap) {
+        document.querySelectorAll('#rvdGrid .rvd-line').forEach(function (lineEl) {
+            var cur = rvdField(lineEl, 'job_no');
+            var inv = rvdField(lineEl, 'invoice_no');
+            var keep = cur ? cur.value : '';
+            if (selectedMap && inv && selectedMap[inv.value.trim()]) {
+                keep = selectedMap[inv.value.trim()] || keep;
+            }
+            rvdSetJobSelect(lineEl, keep);
+        });
+    }
+
+    function rvdLoadJobsForAc(acCode, done) {
+        acCode = String(acCode || '').trim();
+        if (!acCode) {
+            RVD_JOBS = [];
+            if (typeof done === 'function') done();
+            return;
+        }
+        fetch(RVD_SELF + '?action=rvd_jobs_by_ac&ac_code=' + encodeURIComponent(acCode))
+            .then(function (r) {
+                if (!r.ok) throw new Error('Server returned ' + r.status);
+                return r.json();
+            })
+            .then(function (data) {
+                RVD_JOBS = Array.isArray(data) ? data : [];
+                if (typeof done === 'function') done();
+            })
+            .catch(function (err) {
+                console.error('rvdLoadJobsForAc error:', err);
+                if (typeof done === 'function') done();
+            });
+    }
+
     function rvdLineHtml(line) {
         return ''
             + '<tr class="detail-row">'
             +   '<td class="line-no"><span class="rvd-no-txt"></span>'
             +     '<input type="hidden" data-f="ac_subcode"><input type="hidden" data-f="costcenter_code">'
-            +     '<input type="hidden" data-f="job_no"><input type="hidden" data-f="subjob_no"></td>'
+            +     '<input type="hidden" data-f="subjob_no"></td>'
             +   '<td><input type="text" class="detail-input" data-f="ac_code" maxlength="5" placeholder="Click to select" title="Click to select account"></td>'
             +   '<td><input type="text" class="detail-input" data-f="ac_name" tabindex="-1"></td>'
-            +   '<td><div class="detail-cell"><input type="text" class="detail-input" data-f="narration" maxlength="1000">'
-            +     '<button type="button" class="detail-more" tabindex="-1" onclick="rvdOpenMore(this)">More..</button></div></td>'
+            +   '<td class="rvd-nar-cell"><div class="detail-cell rvd-nar-only">'
+            +     '<input type="hidden" data-f="narration" value="">'
+            +     '<button type="button" class="detail-more" tabindex="-1" onclick="rvdOpenMore(this)" title="Narration">More..</button></div></td>'
             +   '<td><input type="text" class="detail-input num" data-f="dr_amount" data-dr-unlocked="0" readonly title="Debit is locked until confirmed"></td>'
             +   '<td><input type="text" class="detail-input num" data-f="cr_amount"></td>'
             +   '<td><div class="detail-cell"><input type="text" class="detail-input" data-f="invoice_no" maxlength="50">'
             // +     '<button type="button" class="rvd-pick detail-pick" data-pick="invoice" tabindex="-1" title="Select invoice (F2)"><i class="fa fa-arrow-circle-down"></i></button>'
             +   '</div></td>'
             +   '<td><input type="date" class="detail-input" data-f="invoice_date"></td>'
+            +   '<td><select class="detail-input" data-f="job_no">' + rvdJobOptions(line.job_no || '') + '</select></td>'
             +   '<td><select class="detail-input" data-f="salesman_code">' + rvdSalesmanOptions(line.salesman_code || '') + '</select></td>'
             +   '<td class="rvd-del-cell"><button type="button" class="rvd-del btn-danger" title="Delete line" tabindex="-1" onclick="rvdDeleteLine(this)"><i class="fa fa-trash"></i></button></td>'
             + '</tr>';
@@ -303,9 +434,10 @@ $rvd_self_url = '/' . ltrim(
 
         RVD_FIELDS.forEach(function (f) {
             var el = rvdField(tbody, f);
-            if (!el || f === 'salesman_code' || line[f] === undefined || line[f] === null) return;
+            if (!el || f === 'salesman_code' || f === 'job_no' || line[f] === undefined || line[f] === null) return;
             el.value = (f === 'dr_amount' || f === 'cr_amount') ? rvdFmtNum(line[f]) : line[f];
         });
+        if (line.job_no) rvdSetJobSelect(tbody, line.job_no);
 
         rvdApplyEditable(tbody);
         rvdRenumber();
@@ -481,6 +613,7 @@ $rvd_self_url = '/' . ltrim(
                 rvdField(lineEl, 'ac_name').value = acName;
             }
         });
+        rvdLoadJobsForAc(acCode, function () { rvdRefreshJobOptions(); });
     }
 
     function rvdLineIsBlank(lineEl, refCode) {
@@ -508,8 +641,16 @@ $rvd_self_url = '/' . ltrim(
             rvdField(lineEl, 'invoice_no').value = inv.invoiceno;
             rvdField(lineEl, 'invoice_date').value = String(inv.invoicedate || '').substring(0, 10);
             rvdField(lineEl, 'cr_amount').value = rvdFmtNum(inv.amount);
+            if (inv.job_no) rvdSetJobSelect(lineEl, inv.job_no);
         });
         if (!document.querySelector('#rvdGrid .rvd-line')) rvdAddLine(null, true);
+        rvdLoadJobsForAc(refCode, function () {
+            var map = {};
+            invoices.forEach(function (inv) {
+                if (inv.invoiceno && inv.job_no) map[inv.invoiceno] = inv.job_no;
+            });
+            rvdRefreshJobOptions(map);
+        });
         rvdRenumber();
         rvdRecalc();
     }
@@ -628,19 +769,23 @@ $rvd_self_url = '/' . ltrim(
                 if (rvdParseNum(crEl.value) === 0 && balance > 0) {
                     crEl.value = rvdFmtNum(balance);
                 }
+                if (row.job_no) rvdSetJobSelect(l, row.job_no);
                 rvdRecalc();
             }
         });
     }
 
     function rvdLookupJob(lineEl) {
+        var refEl = document.getElementById('refCodeInput');
+        var acCode = (refEl && refEl.value.trim()) || (rvdField(lineEl, 'ac_code').value || '').trim();
         rvdOpenLookup(lineEl, {
             title: 'Select Job',
-            url: function (term) { return RVD_SELF + '?action=rvd_search_jobs&term=' + encodeURIComponent(term); },
-            cols: [{ k: 'job_no', label: 'Job No' }, { k: 'job_name', label: 'Job Name' }],
+            url: function () {
+                return RVD_SELF + '?action=rvd_jobs_by_ac&ac_code=' + encodeURIComponent(acCode);
+            },
+            cols: [{ k: 'job_no', label: 'Job No' }],
             pick: function (l, row) {
-                rvdField(l, 'job_no').value = row.job_no;
-                rvdField(l, 'subjob_no').focus();
+                rvdSetJobSelect(l, row.job_no);
             }
         });
     }
