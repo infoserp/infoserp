@@ -818,6 +818,24 @@ $allowAllBranch  = $allow_allbranch;
             color: var(--text);
         }
         .ls-table tbody tr:hover { background: var(--bg); }
+        .ls-badge {
+            display: inline-block;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: .03em;
+            padding: 2px 8px;
+            border-radius: 999px;
+            background: var(--primary-soft);
+            color: var(--primary);
+            border: 1px solid var(--border);
+        }
+        .ls-docno {
+            display: block;
+            margin-top: 4px;
+            font-size: 12px;
+            color: var(--primary);
+            font-weight: 600;
+        }
         .ls-doclink {
             color: var(--primary);
             font-weight: 600;
@@ -951,7 +969,7 @@ $allowAllBranch  = $allow_allbranch;
             <div class="ls-table-tools ls-no-print">
                 <div class="ls-table-search">
                     <i class="fa fa-search" aria-hidden="true"></i>
-                    <input type="text" id="lsLineFilter" placeholder="Search doc no or description" autocomplete="off">
+                    <input type="text" id="lsLineFilter" placeholder="Search doc type, doc no or description" autocomplete="off">
                 </div>
                 <div class="ls-entry-count"><span id="lsEntryCount">0</span> entries</div>
             </div>
@@ -1330,16 +1348,22 @@ $allowAllBranch  = $allow_allbranch;
             var creditHtml = (line.credit && String(line.credit).trim() !== '')
                 ? '<span class="ls-amt-credit">' + esc(line.credit) + '</span>'
                 : dashAmt('');
-            var docCell = '<span class="ls-amt-empty">—</span>';
+            var docCell = '';
+            if (line.doc_type) {
+                docCell += '<span class="ls-badge">' + esc(line.doc_type) + '</span>';
+            }
             if (line.doc_no) {
                 if (line.doc_url) {
-                    docCell = '<a class="ls-doclink" href="' + escAttr(line.doc_url)
+                    docCell += '<a class="ls-doclink ls-docno" href="' + escAttr(line.doc_url)
                         + '" data-erp-tab-url="' + escAttr(line.doc_url)
                         + '" data-erp-tab-title="' + escAttr(line.doc_no)
                         + '" title="Open voucher">' + esc(line.doc_no) + '</a>';
                 } else {
-                    docCell = '<span class="ls-docplain">' + esc(line.doc_no) + '</span>';
+                    docCell += '<span class="ls-docplain ls-docno">' + esc(line.doc_no) + '</span>';
                 }
+            }
+            if (!docCell) {
+                docCell = '<span class="ls-amt-empty">—</span>';
             }
             return '<tr>'
                 + '<td>' + esc(line.doc_date) + '</td>'
