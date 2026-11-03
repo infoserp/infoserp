@@ -102,6 +102,7 @@ if (isset($_POST['branch_code'])) {
             'm_deliveryorderdespatch',
             'm_tr-stocktransferout',
             'm_tr-stocktransferin',
+            'm_ledgersingle',
         ]);
         $_SESSION["MR"] = "N";
         $_SESSION["PR"] = "N";
@@ -123,6 +124,7 @@ if (isset($_POST['branch_code'])) {
         $_SESSION["DD"] = "N";
         $_SESSION["TO"] = "N";
         $_SESSION["TI"] = "N";
+        $_SESSION["LS"] = "N";
         $_SESSION["icon_MR"]  = "N";
         $_SESSION["icon_PR"]  = "N";
         $_SESSION["icon_PO"]  = "N";
@@ -142,6 +144,7 @@ if (isset($_POST['branch_code'])) {
         $_SESSION["icon_DD"]  = "N";
         $_SESSION["icon_TO"]  = "N";
         $_SESSION["icon_TI"]  = "N";
+        $_SESSION["icon_LS"]  = "N";
         $_SESSION["menu_paths"] = [];
         foreach ($REPORT_QUERY_RESULT as $REPORT) {
             $_SESSION["menu_paths"][$REPORT["menu_code"]] = [
@@ -247,6 +250,11 @@ if (isset($_POST['branch_code'])) {
                 case "m_tr-stocktransferin": {
                     $_SESSION["TI"] = "Y";
                     $_SESSION["icon_TI"] = $menu_icon;
+                    break;
+                }
+                case "m_ledgersingle": {
+                    $_SESSION["LS"] = "Y";
+                    $_SESSION["icon_LS"] = $menu_icon;
                     break;
                 }
             }

@@ -340,6 +340,15 @@ if (($_SESSION["TI"] ?? 'N') == "Y") {
         'icon'  => 'fa-sign-in',
     ];
 }
+if (($_SESSION["LS"] ?? 'N') == "Y") {
+    $menu_items[] = [
+        'key'       => 'LS',
+        'menu_code' => 'm_ledgersingle',
+        'label'     => 'Ledger Report-Single',
+        'href'      => erp_iframe_url('modules/Report/ledger_report_signle'),
+        'icon'      => 'fa-book',
+    ];
+}
 if ($_SESSION["DD"] == "Y") {
     $menu_items[] = [
         'key'   => 'DD',
@@ -377,11 +386,13 @@ if ($_SESSION["DD"] == "Y") {
 if (!function_exists('erp_menu_group_icon')) {
     function erp_menu_group_icon($label) {
         $icons = [
-            'inventory' => 'fa-cubes',
-            'purchase'  => 'fa-shopping-cart',
-            'sales'     => 'fa-line-chart',
-            'receipt'   => 'fa-money',
-            'master'    => 'fa-database',
+            'inventory'        => 'fa-cubes',
+            'purchase'         => 'fa-shopping-cart',
+            'sales'            => 'fa-line-chart',
+            'receipt'          => 'fa-money',
+            'master'           => 'fa-database',
+            'reports'          => 'fa-bar-chart',
+            'financial report' => 'fa-book',
         ];
         return $icons[strtolower(trim((string) $label))] ?? 'fa-folder-o';
     }

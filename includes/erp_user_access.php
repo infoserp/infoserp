@@ -205,8 +205,10 @@ if (!function_exists('erp_load_active_user_menus')) {
         }
 
         // Menu names used by more than one menu_code; pins which one is the parent.
+        // 'report' → m_reports: legacy rows use parent_code 'Report' while the root is named 'Reports'.
         $parentOverrides = [
             'inventory' => 'm_txn_inventory',
+            'report'    => 'm_reports',
         ];
 
         // Returns the active ancestor path (top level first), or null when the chain is broken.
