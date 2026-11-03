@@ -1301,9 +1301,21 @@ $allowAllBranch  = $allow_allbranch;
         e.preventDefault();
         if (window.ErpTabs && typeof window.ErpTabs.open === 'function') {
             window.ErpTabs.open(title, url);
-        } else {
-            window.location.href = url;
+            return;
         }
+        // ErpTabs script missing: still ask parent shell; never replace this report iframe
+        if (window.parent && window.parent !== window) {
+            try {
+                window.parent.postMessage(
+                    { type: 'OPEN_TAB', title: title, url: url },
+                    window.location.origin
+                );
+                return;
+            } catch (err) { /* fall through */ }
+            window.open(url, '_blank');
+            return;
+        }
+        window.location.href = url;
     });
     document.getElementById('lsBody').addEventListener('auxclick', function (e) {
         if (e.button !== 1) return;

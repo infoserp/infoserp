@@ -333,7 +333,7 @@ $_detail_view = isset($is_view_mode) && $is_view_mode;
     </div>
 </div>
 
-<script src="../../../vendor/jquery/jquery.min.js"></script>
+<script src="../../../assets/vendor/jquery/jquery.min.js"></script>
 <script src="//maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js"></script>
 <script>
     var LOCATION_CODE = <?php echo json_encode($_SESSION['branch_code'] ?? ''); ?>; // Set from session branch code

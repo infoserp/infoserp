@@ -559,7 +559,7 @@ $showing_to   = min($offset + $page_size, $total_count);
 
 </div><!-- /.dod-container / max-w wrapper -->
 
-<script src="../../vendor/jquery/jquery.min.js"></script>
+<script src="../../assets/vendor/jquery/jquery.min.js"></script>
 <script>
 (function () {
     var input      = document.getElementById('dod-search');

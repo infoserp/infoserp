@@ -271,7 +271,7 @@ if ($doc_no !== '') {
         <?php
         // Exit here — don't show the main form yet
         ?>
-        <script src="../../vendor/jquery/jquery.min.js"></script>
+        <script src="../../assets/vendor/jquery/jquery.min.js"></script>
         <script src="//maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js"></script>
     </body>
     </html>
@@ -325,7 +325,7 @@ if ($doc_no !== '') {
     </div><!-- /.mr-container -->
     </div><!-- /.container-fluid -->
 
-    <script src="../../vendor/jquery/jquery.min.js"></script>
+    <script src="../../assets/vendor/jquery/jquery.min.js"></script>
     <script src="//maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js"></script>
     <script src="<?php echo htmlspecialchars(erp_asset_v('assets/js/approvalmenu.js'), ENT_QUOTES, 'UTF-8'); ?>"></script>
     <script src="<?php echo htmlspecialchars(erp_asset_v('assets/js/erp_document.js'), ENT_QUOTES, 'UTF-8'); ?>"></script>

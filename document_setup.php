@@ -746,7 +746,7 @@ foreach (['header' => 'header', 'detail' => 'detail', 'print' => 'print_format']
     </div>
 </div>
 
-<script src="vendor/jquery/jquery.min.js"></script>
+<script src="assets/vendor/jquery/jquery.min.js"></script>
 <script src="//maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js"></script>
 
 <script>

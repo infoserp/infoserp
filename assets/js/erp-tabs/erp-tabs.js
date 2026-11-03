@@ -1,24 +1,32 @@
 /**
  * Child-page helper for the INFOS ERP multi-tab shell.
- * Falls back to normal navigation when not inside the shell.
+ * Falls back safely when the page is not inside a tabbed shell.
  */
 (function (global) {
     'use strict';
 
-    function sameOriginParent() {
+    function hasParent() {
         try {
-            if (!global.parent || global.parent === global) return null;
-            // Accessing parent.location.origin can throw cross-origin; compare via postMessage only.
-            if (global.parent.ErpShellTabs) return global.parent;
-        } catch (e) { /* ignore */ }
-        return null;
+            return !!(global.parent && global.parent !== global);
+        } catch (e) {
+            return false;
+        }
+    }
+
+    function parentHasTabs() {
+        try {
+            return !!(hasParent() && global.parent.ErpShellTabs);
+        } catch (e) {
+            return false;
+        }
     }
 
     function post(payload) {
-        var parent = sameOriginParent();
-        if (!parent) return false;
+        if (!hasParent()) return false;
         try {
-            parent.postMessage(payload, global.location.origin);
+            // Always post when framed — shell listener accepts OPEN_TAB even if
+            // this helper cannot read parent.ErpShellTabs for some reason.
+            global.parent.postMessage(payload, global.location.origin);
             return true;
         } catch (e) {
             return false;
@@ -34,17 +42,31 @@
 
     var ErpTabs = {
         inShell: function () {
-            return !!sameOriginParent();
+            return parentHasTabs();
         },
 
         open: function (title, url) {
             var href = withEmbed(url);
-            if (post({ type: 'OPEN_TAB', title: String(title || 'Page'), url: href })) {
+            if (!href) return;
+
+            // Prefer shell multi-tab open
+            if (hasParent()) {
+                post({ type: 'OPEN_TAB', title: String(title || 'Page'), url: href });
+                if (parentHasTabs()) {
+                    return;
+                }
+                // Inside an iframe but shell tabs JS missing/outdated:
+                // never navigate this frame (would replace the report tab content).
+                try {
+                    global.open(href, '_blank');
+                } catch (e) {
+                    global.top.location.href = href;
+                }
                 return;
             }
-            if (href) {
-                global.location.href = href;
-            }
+
+            // Top-level page (not in shell)
+            global.location.href = href;
         },
 
         setDirty: function (value) {
