@@ -566,6 +566,7 @@ $allowAllBranch  = $allow_allbranch;
     <link rel="stylesheet" href="<?php echo htmlspecialchars(erp_font_awesome_href(), ENT_QUOTES, 'UTF-8'); ?>">
     <link rel="stylesheet" href="<?php echo htmlspecialchars(erp_asset_v('assets/css/erp_document.css'), ENT_QUOTES, 'UTF-8'); ?>">
     <link rel="stylesheet" href="<?php echo htmlspecialchars(erp_asset_v('assets/css/erp_search.css'), ENT_QUOTES, 'UTF-8'); ?>">
+    <script src="<?php echo htmlspecialchars(erp_asset_v('assets/js/erp-tabs/erp-tabs.js'), ENT_QUOTES, 'UTF-8'); ?>" defer></script>
     <style>
         body.ls-body {
             background: var(--bg);
@@ -917,7 +918,12 @@ $allowAllBranch  = $allow_allbranch;
                 <div class="ls-head-right">
                     <div class="ls-acct" id="lsAccountName"></div>
                     <div class="ls-sub" id="lsAccountMeta"></div>
-                    <div class="ls-generated">Generated <span id="lsPrintedAt"></span></div>
+                    <div class="ls-generated ls-no-print">
+                        Generated <span id="lsPrintedAt"></span>
+                        <button type="button" class="ls-btn" id="btnRefreshReport" style="height:28px;margin-left:8px;padding:0 10px;" title="Refresh report" hidden>
+                            <i class="fa fa-refresh"></i> Refresh
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -1020,12 +1026,64 @@ $allowAllBranch  = $allow_allbranch;
     var searchTimeout = null;
     var lastData = null;
     var allLines = [];
+    var FILTER_KEY = 'erp_report_filters:' + window.location.pathname + window.location.search;
+    var RESULT_KEY = 'erp_report_result:' + window.location.pathname + window.location.search;
 
     function showMsg(text, isError) {
         msg.hidden = !text;
         msg.textContent = text || '';
         msg.className = 'ls-msg' + (isError ? ' ls-msg-error' : '');
     }
+
+    function saveFilters() {
+        try {
+            sessionStorage.setItem(FILTER_KEY, JSON.stringify({
+                date_from: document.getElementById('date_from').value,
+                date_to: document.getElementById('date_to').value,
+                ac_code: document.getElementById('ac_code').value,
+                ac_display: document.getElementById('ac_display').value,
+                all_branch: document.getElementById('all_branch').checked ? 'Y' : 'N'
+            }));
+        } catch (e) { /* ignore */ }
+    }
+
+    function saveResult(data) {
+        try {
+            sessionStorage.setItem(RESULT_KEY, JSON.stringify(data));
+        } catch (e) { /* quota — keep filters only */ }
+    }
+
+    function restoreFilters() {
+        try {
+            var raw = sessionStorage.getItem(FILTER_KEY);
+            if (!raw) return;
+            var f = JSON.parse(raw) || {};
+            if (f.date_from) document.getElementById('date_from').value = f.date_from;
+            if (f.date_to) document.getElementById('date_to').value = f.date_to;
+            if (f.ac_code) document.getElementById('ac_code').value = f.ac_code;
+            if (f.ac_display) document.getElementById('ac_display').value = f.ac_display;
+            var all = document.getElementById('all_branch');
+            if (all && !all.disabled) all.checked = (f.all_branch === 'Y');
+        } catch (e) { /* ignore */ }
+    }
+
+    function restoreResult() {
+        try {
+            var raw = sessionStorage.getItem(RESULT_KEY);
+            if (!raw) return;
+            var data = JSON.parse(raw);
+            if (!data || !data.success) return;
+            lastData = data;
+            renderReport(data);
+            report.hidden = false;
+            btnPrint.disabled = false;
+            btnExport.disabled = false;
+            var btnRefresh = document.getElementById('btnRefreshReport');
+            if (btnRefresh) btnRefresh.hidden = false;
+        } catch (e) { /* ignore */ }
+    }
+
+    restoreFilters();
 
     function esc(s) {
         return String(s == null ? '' : s)
@@ -1205,16 +1263,53 @@ $allowAllBranch  = $allow_allbranch;
                     return;
                 }
                 lastData = data;
+                saveFilters();
+                saveResult(data);
+                if (window.ErpTabs && data.header && data.header.account_name) {
+                    window.ErpTabs.setTitle(data.header.account_name);
+                }
                 document.getElementById('lsLineFilter').value = '';
                 renderReport(data);
                 report.hidden = false;
                 btnPrint.disabled = false;
                 btnExport.disabled = false;
+                var btnRefresh = document.getElementById('btnRefreshReport');
+                if (btnRefresh) btnRefresh.hidden = false;
             })
             .catch(function () {
                 btn.disabled = false;
                 showMsg('Report failed.', true);
             });
+    });
+
+    var btnRefreshReport = document.getElementById('btnRefreshReport');
+    if (btnRefreshReport) {
+        btnRefreshReport.addEventListener('click', function () {
+            if (typeof form.requestSubmit === 'function') form.requestSubmit();
+            else form.dispatchEvent(new Event('submit', { cancelable: true }));
+        });
+    }
+
+    document.getElementById('lsBody').addEventListener('click', function (e) {
+        var a = e.target.closest('a.ls-doclink');
+        if (!a) return;
+        var url = a.getAttribute('data-erp-tab-url') || a.getAttribute('href');
+        var title = a.getAttribute('data-erp-tab-title') || a.textContent || 'Document';
+        if (!url) return;
+        // Ctrl/Cmd/middle-click: let browser open in new browser tab
+        if (e.ctrlKey || e.metaKey || e.button === 1) return;
+        e.preventDefault();
+        if (window.ErpTabs && typeof window.ErpTabs.open === 'function') {
+            window.ErpTabs.open(title, url);
+        } else {
+            window.location.href = url;
+        }
+    });
+    document.getElementById('lsBody').addEventListener('auxclick', function (e) {
+        if (e.button !== 1) return;
+        var a = e.target.closest('a.ls-doclink');
+        if (!a) return;
+        // Middle-click keeps default new-tab behavior
     });
 
     function renderRows(lines) {
@@ -1227,6 +1322,8 @@ $allowAllBranch  = $allow_allbranch;
             if (line.doc_no) {
                 if (line.doc_url) {
                     docCell = '<a class="ls-doclink" href="' + escAttr(line.doc_url)
+                        + '" data-erp-tab-url="' + escAttr(line.doc_url)
+                        + '" data-erp-tab-title="' + escAttr(line.doc_no)
                         + '" title="Open voucher">' + esc(line.doc_no) + '</a>';
                 } else {
                     docCell = '<span class="ls-docplain">' + esc(line.doc_no) + '</span>';
@@ -1279,6 +1376,9 @@ $allowAllBranch  = $allow_allbranch;
                 || String(line.doc_type || '').toLowerCase().indexOf(q) >= 0;
         }));
     });
+
+    // After helpers exist, restore last generated result for this report URL
+    restoreResult();
 })();
 </script>
 </body>

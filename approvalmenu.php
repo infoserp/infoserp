@@ -35,6 +35,7 @@ $erp_has_topnav = !empty($menu_tree);
 <?php include __DIR__ . '/includes/erp_styles.php'; ?>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="<?php echo htmlspecialchars(erp_asset_v('assets/css/approvalmenu.css'), ENT_QUOTES, 'UTF-8'); ?>" rel="stylesheet" type="text/css">
+    <link href="<?php echo htmlspecialchars(erp_asset_v('assets/css/erp-tabs.css'), ENT_QUOTES, 'UTF-8'); ?>" rel="stylesheet" type="text/css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>body { font-family: 'Inter', system-ui, sans-serif; }</style>
@@ -65,19 +66,12 @@ $erp_has_topnav = !empty($menu_tree);
     </button>
     <?php endif; ?>
 
-    <main class="flex-1 p-0">
-        <iframe
-            id="erp-main-frame"
-            name="erp-main-frame"
-            src="<?php echo htmlspecialchars($iframe_default, ENT_QUOTES, 'UTF-8'); ?>"
-            class="erp-shell-frame w-full bg-white"
-            loading="eager"
-            referrerpolicy="same-origin"
-            title="INFOS ERP Dashboard"
-        ></iframe>
+    <main class="flex-1 p-0 flex flex-col min-h-0">
+        <?php include __DIR__ . '/includes/erp_shell_tabs.php'; ?>
     </main>
 </div>
 
+<script src="<?php echo htmlspecialchars(erp_asset_v('assets/js/erp-tabs/erp-shell-tabs.js'), ENT_QUOTES, 'UTF-8'); ?>" defer></script>
 <script src="<?php echo htmlspecialchars(erp_asset_v('assets/js/approvalmenu.js'), ENT_QUOTES, 'UTF-8'); ?>" defer></script>
 </body>
 </html>

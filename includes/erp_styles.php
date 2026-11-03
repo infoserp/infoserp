@@ -12,3 +12,4 @@ $erpSessionWatch = !empty($_SESSION['username']);
 <meta name="erp-session-touch" content="<?php echo htmlspecialchars(erp_url('session_touch'), ENT_QUOTES, 'UTF-8'); ?>">
 <script src="<?php echo htmlspecialchars(erp_asset_v('assets/js/erp_session.js'), ENT_QUOTES, 'UTF-8'); ?>" defer></script>
 <?php } ?>
+<script src="<?php echo htmlspecialchars(erp_asset_v('assets/js/erp-tabs/erp-tabs.js'), ENT_QUOTES, 'UTF-8'); ?>" defer></script>

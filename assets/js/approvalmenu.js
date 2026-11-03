@@ -83,7 +83,7 @@
     /** If the shell page is nested in an iframe, swap it for the dashboard embed URL. */
     function initShellIframeGuard() {
         if (window.self === window.top) return;
-        if (!document.getElementById('erp-main-frame')) return;
+        if (!document.getElementById('erp-main-frame') && !document.getElementById('erp-tab-host')) return;
         var meta = document.querySelector('meta[name="erp-iframe-fallback"]');
         var url = meta && meta.content ? meta.content : '';
         if (!url) return;
@@ -327,21 +327,53 @@
         if (typeof onAllow === 'function') onAllow();
     }
 
-    function initIframeNavigation() {
-        var frame = document.getElementById('erp-main-frame');
-        if (!frame) return;
+    function activeContentFrame() {
+        if (window.ErpShellTabs && typeof window.ErpShellTabs.getState === 'function') {
+            var st = window.ErpShellTabs.getState();
+            if (st && st.activeId) {
+                return document.getElementById('erp-tab-frame-' + st.activeId);
+            }
+        }
+        return document.getElementById('erp-main-frame');
+    }
 
+    function openInWorkspace(title, href, navKey) {
+        var url = withEmbed(href);
+        if (window.ErpShellTabs && typeof window.ErpShellTabs.open === 'function') {
+            window.ErpShellTabs.open({
+                title: title || 'Page',
+                url: url,
+                pinned: (navKey === 'dashboard')
+            });
+            setActiveNav(navKey || '');
+            closeSidebarOnMobile();
+            return;
+        }
+        var frame = activeContentFrame();
+        if (!frame) {
+            window.location.href = url;
+            return;
+        }
+        requestLeaveContentFrame(frame, function () {
+            frame.src = url;
+            setActiveNav(navKey || '');
+            closeSidebarOnMobile();
+        });
+    }
+
+    function initIframeNavigation() {
         document.querySelectorAll('a[data-iframe-nav="1"]').forEach(function (link) {
-            link.setAttribute('target', 'erp-main-frame');
+            // Keep target for progressive enhancement when tabs JS fails to load
+            if (!link.getAttribute('target')) {
+                link.setAttribute('target', 'erp-main-frame');
+            }
             link.addEventListener('click', function (event) {
                 var href = link.getAttribute('href');
                 if (!href || href.indexOf('javascript:') === 0) return;
                 event.preventDefault();
-                requestLeaveContentFrame(frame, function () {
-                    frame.src = withEmbed(href);
-                    setActiveNav(link.getAttribute('data-nav-key') || '');
-                    closeSidebarOnMobile();
-                });
+                var title = (link.textContent || '').replace(/\s+/g, ' ').trim() || 'Page';
+                var navKey = link.getAttribute('data-nav-key') || '';
+                openInWorkspace(title, href, navKey);
             });
         });
     }
@@ -363,7 +395,9 @@
         initRefreshButton();
         initIframeNavigation();
         initEmbeddedLinks();
-        if (document.getElementById('erp-main-frame') || document.getElementById('refresh-counts-btn')) {
+        if (document.getElementById('erp-main-frame')
+            || document.getElementById('erp-tab-host')
+            || document.getElementById('refresh-counts-btn')) {
             loadDashboardCounts(false);
         }
     });
@@ -372,4 +406,5 @@
     window.erpWithEmbed = withEmbed;
     window.erpNavUrl = erpNavUrl;
     window.erpPatchEmbeddedLinks = patchEmbeddedLinks;
+    window.erpOpenInWorkspace = openInWorkspace;
 }());
