@@ -110,19 +110,77 @@
         return 'tab-' + (seq++) + '-' + Date.now().toString(36);
     }
 
-    function confirmDiscard(title) {
+    function confirmModal(titleText, bodyText, okLabel) {
         return new Promise(function (resolve) {
             if (!modalEl) {
-                resolve(global.confirm('Discard unsaved changes?'));
+                resolve(global.confirm(bodyText || titleText || 'Continue?'));
                 return;
             }
             modalResolve = resolve;
-            $('erp-tab-modal-title').textContent = 'Discard unsaved changes?';
-            $('erp-tab-modal-body').textContent =
-                (title ? '"' + title + '" has unsaved changes. Close it anyway?' : 'This tab has unsaved changes. Close it anyway?');
+            $('erp-tab-modal-title').textContent = titleText || 'Unsaved changes';
+            $('erp-tab-modal-body').textContent = bodyText || 'You have unsaved changes.';
+            if (modalOk) modalOk.textContent = okLabel || 'Continue';
             modalEl.classList.add('is-open');
             modalEl.setAttribute('aria-hidden', 'false');
             if (modalOk) modalOk.focus();
+        });
+    }
+
+    function confirmDiscard(title) {
+        return confirmModal(
+            'Discard unsaved changes?',
+            title ? '"' + title + '" has unsaved changes. Close it anyway?' : 'This tab has unsaved changes. Close it anyway?',
+            'Discard'
+        );
+    }
+
+    function confirmLeaveDirty(title) {
+        return confirmModal(
+            'Unsaved changes',
+            title
+                ? '"' + title + '" has unsaved changes. Switch tabs anyway? Your edits stay in that tab until you save or discard.'
+                : 'You have unsaved changes. Switch tabs anyway?',
+            'Switch'
+        );
+    }
+
+    /**
+     * Ask before leaving the active tab when it has unsaved edits.
+     * Prefers the iframe's erpConfirmLeaveNav (form-aware); falls back to shell dirty flag.
+     */
+    function withLeaveDirtyCheck(nextId, proceed) {
+        var cur = findTab(state.activeId);
+        if (!cur || cur.id === nextId) {
+            proceed();
+            return;
+        }
+
+        var frame = document.getElementById('erp-tab-frame-' + cur.id);
+        try {
+            var win = frame && frame.contentWindow;
+            if (win && typeof win.erpConfirmLeaveNav === 'function') {
+                // Sync red-dot from authoritative form dirty check, then warn inside iframe
+                if (typeof win.erpHasUnsavedEntry === 'function' && win.erpHasUnsavedEntry()) {
+                    win.erpConfirmLeaveNav(proceed);
+                    return;
+                }
+                // Form says clean — clear stale shell dirty and continue
+                if (cur.dirty) {
+                    cur.dirty = false;
+                    renderStrip();
+                    saveState();
+                }
+                proceed();
+                return;
+            }
+        } catch (e) { /* cross-origin / unloaded — use shell flag */ }
+
+        if (!cur.dirty) {
+            proceed();
+            return;
+        }
+        confirmLeaveDirty(cur.title).then(function (ok) {
+            if (ok) proceed();
         });
     }
 
@@ -310,19 +368,28 @@
         });
     }
 
-    function activateTab(id) {
+    function activateTab(id, force) {
         var tab = findTab(id);
         if (!tab) return;
-        if (state.activeId && state.activeId !== id) {
-            state.lastActiveId = state.activeId;
+
+        function doActivate() {
+            if (state.activeId && state.activeId !== id) {
+                state.lastActiveId = state.activeId;
+            }
+            state.activeId = id;
+            renderStrip();
+            syncPanels();
+            saveState();
+            setActiveNavFromTab(tab);
+            var btn = document.getElementById('erp-tab-btn-' + id);
+            if (btn) btn.focus();
         }
-        state.activeId = id;
-        renderStrip();
-        syncPanels();
-        saveState();
-        setActiveNavFromTab(tab);
-        var btn = document.getElementById('erp-tab-btn-' + id);
-        if (btn) btn.focus();
+
+        if (force) {
+            doActivate();
+            return;
+        }
+        withLeaveDirtyCheck(id, doActivate);
     }
 
     function openTab(opts) {
@@ -330,10 +397,11 @@
         var title = String(opts.title || 'Page').trim() || 'Page';
         var url = withEmbed(opts.url || '');
         if (!url) return null;
+        var skipLeave = !!opts.skipLeaveCheck;
 
         var existing = findTabByUrl(url);
         if (existing) {
-            activateTab(existing.id);
+            activateTab(existing.id, skipLeave);
             return existing;
         }
 
@@ -352,31 +420,44 @@
             }
         }
 
-        var tab = {
-            id: opts.id || nextId(),
-            title: title,
-            url: url,
-            dirty: !!opts.dirty,
-            pinned: !!opts.pinned,
-            loading: true
-        };
+        function doOpen() {
+            var tab = {
+                id: opts.id || nextId(),
+                title: title,
+                url: url,
+                dirty: !!opts.dirty,
+                pinned: !!opts.pinned,
+                loading: true
+            };
 
-        var insertAt = state.tabs.length;
-        if (state.activeId) {
-            for (var i = 0; i < state.tabs.length; i++) {
-                if (state.tabs[i].id === state.activeId) {
-                    insertAt = i + 1;
-                    break;
+            var insertAt = state.tabs.length;
+            if (state.activeId) {
+                for (var i = 0; i < state.tabs.length; i++) {
+                    if (state.tabs[i].id === state.activeId) {
+                        insertAt = i + 1;
+                        break;
+                    }
                 }
             }
+            state.tabs.splice(insertAt, 0, tab);
+            state.activeId = tab.id;
+            renderStrip();
+            syncPanels();
+            saveState();
+            setActiveNavFromTab(tab);
+            return tab;
         }
-        state.tabs.splice(insertAt, 0, tab);
-        state.activeId = tab.id;
-        renderStrip();
-        syncPanels();
-        saveState();
-        setActiveNavFromTab(tab);
-        return tab;
+
+        if (skipLeave || opts.pinned) {
+            return doOpen();
+        }
+
+        // Opening another screen while current tab has edits → warn first
+        var opened = null;
+        withLeaveDirtyCheck(null, function () {
+            opened = doOpen();
+        });
+        return opened;
     }
 
     function closeTab(id, force) {

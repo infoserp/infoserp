@@ -91,19 +91,22 @@
 .erp-tab-close:hover { background: #e2e8f0; color: #0f172a; }
 .erp-tab:hover .erp-tab-close,
 .erp-tab.is-active .erp-tab-close { display: inline-flex; }
-.erp-tab.is-dirty:not(:hover):not(.is-active) .erp-tab-close { display: none; }
-.erp-tab.is-dirty:not(:hover):not(.is-active) .erp-tab-dirty-dot { display: inline-block; }
+/* Dirty: red dot replaces close until hover (active + inactive) */
+.erp-tab.is-dirty:not(:hover) .erp-tab-close { display: none !important; }
+.erp-tab.is-dirty .erp-tab-dirty-dot { display: inline-block; }
+.erp-tab.is-dirty:hover .erp-tab-dirty-dot { display: none; }
 .erp-tab.is-pinned .erp-tab-close { display: none !important; }
 .erp-tab.is-pinned .erp-tab-dirty-dot { display: none !important; }
 
 .erp-tab-dirty-dot {
     display: none;
-    width: 0.4rem;
-    height: 0.4rem;
+    width: 0.5rem;
+    height: 0.5rem;
     border-radius: 999px;
-    background: #2563eb;
+    background: #dc2626;
+    box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.25);
     flex-shrink: 0;
-    margin-left: 0.2rem;
+    margin-left: 0.25rem;
 }
 
 .erp-tab-loading {

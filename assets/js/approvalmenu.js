@@ -339,26 +339,37 @@
 
     function openInWorkspace(title, href, navKey) {
         var url = withEmbed(href);
-        if (window.ErpShellTabs && typeof window.ErpShellTabs.open === 'function') {
-            window.ErpShellTabs.open({
-                title: title || 'Page',
-                url: url,
-                pinned: (navKey === 'dashboard')
-            });
-            setActiveNav(navKey || '');
-            closeSidebarOnMobile();
-            return;
-        }
         var frame = activeContentFrame();
-        if (!frame) {
-            window.location.href = url;
-            return;
-        }
-        requestLeaveContentFrame(frame, function () {
+        var hasIframeGuard = false;
+        try {
+            hasIframeGuard = !!(frame && frame.contentWindow
+                && typeof frame.contentWindow.erpConfirmLeaveNav === 'function');
+        } catch (e) { /* ignore */ }
+
+        function doOpen() {
+            if (window.ErpShellTabs && typeof window.ErpShellTabs.open === 'function') {
+                // skipLeaveCheck only when the iframe already showed the leave warning
+                window.ErpShellTabs.open({
+                    title: title || 'Page',
+                    url: url,
+                    pinned: (navKey === 'dashboard'),
+                    skipLeaveCheck: hasIframeGuard
+                });
+                setActiveNav(navKey || '');
+                closeSidebarOnMobile();
+                return;
+            }
+            if (!frame) {
+                window.location.href = url;
+                return;
+            }
             frame.src = url;
             setActiveNav(navKey || '');
             closeSidebarOnMobile();
-        });
+        }
+
+        // Always ask the active voucher iframe first (edit / unsaved → warning)
+        requestLeaveContentFrame(frame, doOpen);
     }
 
     function initIframeNavigation() {

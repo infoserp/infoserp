@@ -31,7 +31,9 @@
  * Set the PHP vars above to control their behaviour.
  */
 require_once __DIR__ . '/../includes/erp_paths.php';
-
+?>
+<script src="<?php echo htmlspecialchars(erp_asset_v('assets/js/erp-tabs/erp-tabs.js'), ENT_QUOTES, 'UTF-8'); ?>"></script>
+<?php
 $is_view_mode      = $is_view_mode      ?? false;
 $close_url         = $close_url         ?? erp_iframe_url('dashboard');
 $shell_home_url    = erp_shell_url();
@@ -467,6 +469,8 @@ function erpVerifyEditPassword() {
             if (typeof erpToolbarSetState === 'function') {
                 erpToolbarSetState({ save: true, edit: false, cancel: true });
             }
+            // Editing an existing document → mark shell tab dirty
+            window.erpMarkFormDirty();
         })
         .catch(function (err) {
             console.error('erpVerifyEditPassword error:', err);
@@ -513,13 +517,23 @@ function erpSerializeFormState() {
     return parts.join('\n');
 }
 
+window.erpSyncShellTabDirty = function (isDirty) {
+    try {
+        if (window.ErpTabs && typeof window.ErpTabs.setDirty === 'function') {
+            window.ErpTabs.setDirty(!!isDirty);
+        }
+    } catch (e) { /* ignore */ }
+};
+
 window.erpCaptureFormSnapshot = function () {
     _erpFormSnapshot = erpSerializeFormState();
     window.erpFormDirty = false;
+    window.erpSyncShellTabDirty(false);
 };
 
 window.erpMarkFormDirty = function () {
     window.erpFormDirty = true;
+    window.erpSyncShellTabDirty(true);
 };
 
 window.erpHasUnsavedEntry = function () {
@@ -527,7 +541,9 @@ window.erpHasUnsavedEntry = function () {
     if (window.erpFormDirty) return true;
     if (_erpFormSnapshot == null) return false;
     try {
-        return erpSerializeFormState() !== _erpFormSnapshot;
+        var dirty = erpSerializeFormState() !== _erpFormSnapshot;
+        if (dirty) window.erpSyncShellTabDirty(true);
+        return dirty;
     } catch (e) {
         return false;
     }
