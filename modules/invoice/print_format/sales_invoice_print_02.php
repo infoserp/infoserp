@@ -232,17 +232,17 @@ if ($inv_salesman_code !== '') {
     $inv_sign_img = erp_print_image_data_uri($sm['signature_file'] ?? '');
 }
 
-// Pagination: customer/info boxes only on page 1; narrower desc column with new fields.
-// Sign/stamp/company flow under the table (not pinned to letter-footer).
+// Fixed-height items grid: pad with a filler row so column lines run to a
+// stable height. Customer/info boxes only on page 1. Sign/stamp sit above the letter-footer.
 $inv_row_mm   = 5.5;
 $inv_wrap_mm  = 4;
 $inv_wrap_chr = 32;
 $inv_area_mm  = 155;
 $inv_first_area_mm = 110;
-// bank+totals(~32) + words(~8) + breakup(~12) + sign(~32) + pad
-$inv_footer_reserve = 100.0;
-$inv_last_area_mm = max(24.0, min($inv_area_mm, 205.0 - $inv_footer_reserve));
-$inv_first_last_area_mm = max(18.0, min($inv_first_area_mm, 170.0 - $inv_footer_reserve));
+// bank+totals(~28) + words(~9) + sign/stamp(~30) + pageno(~5) + pad
+$inv_footer_reserve = 82.0;
+$inv_last_area_mm = max(28.0, min($inv_area_mm, 215.0 - $inv_footer_reserve));
+$inv_first_last_area_mm = max(28.0, min($inv_first_area_mm, 180.0 - $inv_footer_reserve));
 
 list($inv_pages, $inv_page_mm) = erp_print_paginate_detail_rows($inv_rows, [
     'area_mm'            => $inv_area_mm,
@@ -258,6 +258,13 @@ $inv_line_no = 0;
 
 foreach ($inv_pages as $page_index => $page_rows) {
     $is_last = ($page_index === $inv_page_count - 1);
+    $used_mm = isset($inv_page_mm[$page_index]) ? (float) $inv_page_mm[$page_index] : 0.0;
+    if ($is_last) {
+        $target_mm = ($page_index === 0) ? $inv_first_last_area_mm : $inv_last_area_mm;
+    } else {
+        $target_mm = ($page_index === 0) ? $inv_first_area_mm : $inv_area_mm;
+    }
+    $fill_mm = max(0.0, round($target_mm - $used_mm, 1));
     ?>
 <div class="erp-print-sheet pf-inv2-sheet<?php echo $page_index > 0 ? ' pf-break' : ''; ?>">
     <div class="pf-inv2-head"><?php if ($inv_header_img !== '') { ?><img src="<?php echo $inv_header_img; ?>" alt=""><?php } ?></div>
@@ -331,7 +338,6 @@ foreach ($inv_pages as $page_index => $page_rows) {
         </table>
         <?php } ?>
 
-        <?php if (!empty($page_rows)) { ?>
         <table class="pf-items pf-inv2-items<?php echo $page_index > 0 ? ' pf-inv2-items-cont' : ''; ?>">
             <colgroup>
                 <col class="pf-inv2-c-no">
@@ -380,9 +386,14 @@ foreach ($inv_pages as $page_index => $page_rows) {
                     <td class="num"><?php echo $show ? erp_print_amount($r['net']) : ''; ?></td>
                 </tr>
                 <?php } ?>
+                <?php if ($fill_mm > 0) { ?>
+                <tr class="pf-fill">
+                    <td style="height: <?php echo $fill_mm; ?>mm;"></td>
+                    <td></td><td></td><td></td><td></td><td></td><td></td><td></td>
+                </tr>
+                <?php } ?>
             </tbody>
         </table>
-        <?php } ?>
 
         <?php if ($is_last) { ?>
         <!-- Same column widths as items table so totals lines match Vat Amount / Net Amount -->

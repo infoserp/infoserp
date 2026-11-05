@@ -870,8 +870,10 @@ html body.erp-print-page {
 }
 
 .pf-items.pf-inv2-items {
+    width: 100%;
     margin-top: 0;
     table-layout: fixed;
+    border-collapse: collapse;
     border: 1px solid #000;
     border-top: none;
     border-bottom: none;
@@ -885,35 +887,53 @@ html body.erp-print-page {
     margin-top: 2mm;
     border-top: 1px solid #000;
 }
-.pf-inv2-c-no      { width: 7mm; }
-.pf-inv2-c-desc    { width: auto; }
-.pf-inv2-c-qty     { width: 12mm; }
-.pf-inv2-c-rate    { width: 18mm; }
-.pf-inv2-c-taxable { width: 24mm; }
-.pf-inv2-c-vpct    { width: 12mm; }
-.pf-inv2-c-vat     { width: 20mm; }
-.pf-inv2-c-net     { width: 22mm; }
+/*
+ * Explicit mm widths (content ~190mm). No+Description = 95mm so Desc|Qty
+ * lines up with the 50/50 customer / invoice info divider above.
+ */
+.pf-inv2-c-no      { width: 8mm; }
+.pf-inv2-c-desc    { width: 87mm; }
+.pf-inv2-c-qty     { width: 11mm; }
+.pf-inv2-c-rate    { width: 16mm; }
+.pf-inv2-c-taxable { width: 22mm; }
+.pf-inv2-c-vpct    { width: 11mm; }
+.pf-inv2-c-vat     { width: 17mm; }
+.pf-inv2-c-net     { width: 18mm; }
+.pf-inv2-items th,
+.pf-inv2-items td {
+    box-sizing: border-box;
+    border-left: 1px solid #000;
+    border-right: 1px solid #000;
+}
 .pf-inv2-items th {
     height: 6.5mm;
-    padding: 0 .6mm;
+    padding: 0 .5mm;
     font-size: 7pt;
     font-weight: bold;
+    text-align: center;
+    vertical-align: middle;
     background: #fff;
-    border: 1px solid #000;
+    border-top: 1px solid #000;
+    border-bottom: 1px solid #000;
     white-space: normal;
     line-height: 1.15;
 }
 .pf-inv2-items td {
     height: 4.6mm;
-    padding: .5mm .6mm;
+    padding: .45mm .5mm;
     font-size: 7.5pt;
     vertical-align: top;
-    border-left: 1px solid #000;
-    border-right: 1px solid #000;
+}
+.pf-inv2-items tr.pf-fill td {
+    padding: 0;
+    height: auto;
+    vertical-align: top;
+    border-top: none;
 }
 .pf-inv2-items td.wrap {
     white-space: normal;
     word-wrap: break-word;
+    overflow-wrap: break-word;
 }
 .pf-inv2-note {
     margin-top: .6mm;
@@ -1003,24 +1023,26 @@ html body.erp-print-page {
     border-top: none;
 }
 
-/* Sign + stamp flow under table/breakup (not fixed to letter-footer) */
+/* Sign + stamp + company name sit just above the letter-footer band */
 .pf-inv2-sign-block {
-    margin-top: 6mm;
-    margin-bottom: 2mm;
+    margin-top: 7mm;
+    margin-bottom: 3mm;
+    min-height: 28mm;
     font-size: 9pt;
 }
 .pf-inv2-sign-media {
-    margin: 0 0 2mm;
+    margin: 0 0 3mm;
+    min-height: 22mm;
     line-height: 0;
 }
 .pf-inv2-sign-img {
     display: inline-block;
-    max-height: 15mm;
-    max-width: 42mm;
+    max-height: 16mm;
+    max-width: 44mm;
     height: auto;
     width: auto;
-    margin-right: 8mm;
-    vertical-align: middle;
+    margin-right: 10mm;
+    vertical-align: bottom;
 }
 .pf-inv2-stamp {
     display: inline-block;
@@ -1028,12 +1050,13 @@ html body.erp-print-page {
     height: 24mm;
     border-radius: 50%;
     object-fit: cover;
-    vertical-align: middle;
+    vertical-align: bottom;
 }
 .pf-inv2-for {
     font-weight: bold;
-    line-height: 1.3;
+    line-height: 1.35;
     font-size: 9pt;
+    letter-spacing: .02em;
 }
 
 .pf-inv2-cont {
@@ -1043,9 +1066,11 @@ html body.erp-print-page {
     color: #334155;
 }
 .pf-inv2-body .pf-pageno {
-    margin-top: 1.5mm;
+    margin-top: 2mm;
+    margin-bottom: 1mm;
     font-size: 8pt;
     color: #475569;
+    text-align: right;
 }
 
 /* ---------------------------- Receipt Voucher (pf-rv) ---------------------------- */

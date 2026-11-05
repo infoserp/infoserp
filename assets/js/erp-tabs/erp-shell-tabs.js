@@ -679,16 +679,25 @@
             if (link.getAttribute('data-erp-tabs-bound') === '1') return;
             link.setAttribute('data-erp-tabs-bound', '1');
             link.addEventListener('click', function (event) {
-                var msg = isLogout
-                    ? 'Log out and close all open tabs?'
-                    : 'Change branch and close all open tabs?';
-                if (state.tabs.length > 1 || anyDirty()) {
-                    if (!global.confirm(msg)) {
-                        event.preventDefault();
-                        return;
-                    }
+                // No open tabs / clean session → clear and navigate normally
+                if (!(state.tabs.length > 1 || anyDirty())) {
+                    clearState();
+                    return;
                 }
-                clearState();
+
+                event.preventDefault();
+                var goHref = link.href;
+                confirmModal(
+                    isLogout ? 'Log out?' : 'Change branch?',
+                    isLogout
+                        ? 'Log out and close all open tabs? Unsaved edits in open tabs will be lost.'
+                        : 'Change branch and close all open tabs? Unsaved edits in open tabs will be lost.',
+                    isLogout ? 'Log out' : 'Continue'
+                ).then(function (ok) {
+                    if (!ok) return;
+                    clearState();
+                    global.location.href = goHref;
+                });
             });
         });
     }
