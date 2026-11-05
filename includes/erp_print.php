@@ -434,7 +434,8 @@ if (!function_exists('erp_print_pdf')) {
         $options->set('isRemoteEnabled', false);
         // Dompdf 2 used a string chroot; 3 accepts array — keep string for wider compatibility
         $options->set('chroot', dirname(__DIR__));
-        $options->set('defaultFont', 'Helvetica');
+        // Match erp_print.css — Helvetica/Arial make capital I / lowercase l look heavy
+        $options->set('defaultFont', 'DejaVu Sans');
 
         $dompdf = new \Dompdf\Dompdf($options);
         $dompdf->loadHtml($html, 'UTF-8');

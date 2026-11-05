@@ -17,6 +17,24 @@
 
 @page { size: A4; margin: 0; }
 
+/*
+ * Print body font — Arial/Helvetica capital I and lowercase l are plain stems and
+ * often look "bold" on screen. Prefer Calibri (serifed I on Windows) / Segoe UI,
+ * then Dompdf's bundled DejaVu Sans so PDF and preview stay consistent.
+ */
+@font-face {
+    font-family: "DejaVu Sans";
+    font-style: normal;
+    font-weight: 400;
+    src: url("../../vendor/dompdf/dompdf/lib/fonts/DejaVuSans.ttf") format("truetype");
+}
+@font-face {
+    font-family: "DejaVu Sans";
+    font-style: normal;
+    font-weight: 700;
+    src: url("../../vendor/dompdf/dompdf/lib/fonts/DejaVuSans-Bold.ttf") format("truetype");
+}
+
 /* ════════════════════════════ Preview page ════════════════════════════ */
 html body.erp-print-page {
     background: #e9edf2;
@@ -104,8 +122,12 @@ html body.erp-print-page {
     box-sizing: border-box;
     background: #fff;
     color: #000;
-    font-family: Arial, Helvetica, sans-serif;
+    font-family: Calibri, "Segoe UI", "DejaVu Sans", Arial, Helvetica, sans-serif;
     font-size: 9pt;
+    font-weight: 400;
+    font-synthesis: none;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
     line-height: 1.25;
 }
 .erp-print-sheet.pf-break {

@@ -99,6 +99,8 @@ $sq_total      = round($sq_tot['gross'], 2);
 $sq_discount   = round($sq_tot['discount'], 2);
 $sq_vat        = round($sq_tot['vat'], 2);
 $sq_net        = round($sq_total - $sq_discount + $sq_vat, 2);
+$sq_show_discount = abs($sq_discount) > 0.005;
+$sq_sum_rows      = $sq_show_discount ? 4 : 3;
 
 if (count($sq_vat_pcts) === 1) {
     $sq_vat_label = 'VAT ' . array_key_first($sq_vat_pcts) . '%';
@@ -384,14 +386,16 @@ foreach ($sq_pages as $page_index => $page_rows) {
                     <col class="pf-sq-c-amt">
                 </colgroup>
                 <tr>
-                    <td class="pf-sq-words" rowspan="4"><?php echo htmlspecialchars($sq_words); ?></td>
+                    <td class="pf-sq-words" rowspan="<?php echo (int) $sq_sum_rows; ?>"><?php echo htmlspecialchars($sq_words); ?></td>
                     <td class="pf-sq-sum-k">Total :</td>
                     <td class="pf-sq-sum-v"><?php echo erp_print_amount($sq_total); ?></td>
                 </tr>
+                <?php if ($sq_show_discount) { ?>
                 <tr>
                     <td class="pf-sq-sum-k">Discount :</td>
                     <td class="pf-sq-sum-v"><?php echo erp_print_amount($sq_discount); ?></td>
                 </tr>
+                <?php } ?>
                 <tr>
                     <td class="pf-sq-sum-k"><?php echo htmlspecialchars($sq_vat_label); ?> :</td>
                     <td class="pf-sq-sum-v"><?php echo erp_print_amount($sq_vat); ?></td>

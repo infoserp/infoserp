@@ -1349,10 +1349,8 @@ $rv_self_url = '/' . ltrim(
     (function() {
         var tbSave = document.getElementById('tbSave');
         if (tbSave) tbSave.disabled = true;
-        var tbPreview = document.getElementById('tbPreview');
-        if (tbPreview) {
-            tbPreview.disabled = false;
-            tbPreview.title = 'Preview';
+        if (typeof erpToolbarEnablePreview === 'function') {
+            erpToolbarEnablePreview(<?php echo json_encode($_GET['doc_no'] ?? $doc_no ?? ''); ?>);
         }
         window.ERP_PREV_DOC_NO = <?php echo json_encode($_save_prev_doc ?? ''); ?>;
         window.ERP_NEXT_DOC_NO = <?php echo json_encode($_save_next_doc ?? ''); ?>;
@@ -1367,13 +1365,14 @@ $rv_self_url = '/' . ltrim(
     // Ensure Preview is clickable when viewing a saved voucher
     (function () {
         var isUpd = document.querySelector('#rvForm input[name="is_update"]');
-        var saved = <?php echo (!empty($is_view_mode) && trim((string) $doc_no) !== '') ? 'true' : 'false'; ?>
-            || (isUpd && String(isUpd.value) === '1');
-        if (!saved) return;
-        var tbPreview = document.getElementById('tbPreview');
-        if (tbPreview) {
-            tbPreview.disabled = false;
-            tbPreview.title = 'Preview';
+        var savedDoc = <?php echo json_encode((!empty($is_view_mode) && trim((string) $doc_no) !== '') ? (string) $doc_no : ''); ?>;
+        if (!savedDoc && isUpd && String(isUpd.value) === '1') {
+            var dn = document.querySelector('#rvForm [name="doc_no"]');
+            savedDoc = dn ? String(dn.value || '') : '';
+        }
+        if (!savedDoc) return;
+        if (typeof erpToolbarEnablePreview === 'function') {
+            erpToolbarEnablePreview(savedDoc);
         }
     })();
 </script>

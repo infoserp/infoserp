@@ -2193,7 +2193,11 @@ $si_self_url = '/' . ltrim(
 
     // PREVIEW — print preview of the saved document (print format from Document Setup)
     window.erpToolbar.onPreview = function () {
-        erpOpenPrintPreview(<?php echo json_encode($target_code); ?>, <?php echo json_encode($selected_doc_type); ?>, <?php echo json_encode($is_view_mode ? $doc_no : ''); ?>);
+        erpOpenPrintPreview(
+            <?php echo json_encode($target_code); ?>,
+            <?php echo json_encode($selected_doc_type); ?>,
+            window.ERP_PRINT_DOC_NO || <?php echo json_encode($is_view_mode ? $doc_no : ''); ?>
+        );
     };
 
     // FIND — navigate to the document selected in the toolbar's search modal
@@ -2302,10 +2306,13 @@ $si_self_url = '/' . ltrim(
         window.ERP_DOC_TYPE = '<?php echo addslashes($selected_doc_type); ?>';
     }
     <?php if (!empty($save_success)): ?>
-    // After save: disable SAVE button and update PRIOR/NEXT toolbar navigation
+    // After save: disable SAVE, enable Preview, update PRIOR/NEXT
     (function() {
         var tbSave = document.getElementById('tbSave');
         if (tbSave) tbSave.disabled = true;
+        if (typeof erpToolbarEnablePreview === 'function') {
+            erpToolbarEnablePreview(<?php echo json_encode($_GET['doc_no'] ?? $doc_no ?? ''); ?>);
+        }
         window.ERP_PREV_DOC_NO = <?php echo json_encode($_save_prev_doc ?? ''); ?>;
         window.ERP_NEXT_DOC_NO = <?php echo json_encode($_save_next_doc ?? ''); ?>;
         var tbPrior = document.getElementById('tbPrior');

@@ -781,7 +781,23 @@ document.addEventListener('keydown', function (e) {
 // PREVIEW window: the document's print format (document_setup.print_file)
 // shown inside this page by shared/print_preview.php
 // ─────────────────────────────────────────────────────────────────────────────
+window.ERP_PRINT_DOC_NO = <?php echo json_encode(($is_view_mode && trim((string) $doc_no) !== '') ? (string) $doc_no : ''); ?>;
+
+/** Enable Preview after save (or when opening a saved document). */
+window.erpToolbarEnablePreview = function (docNo) {
+    if (docNo) {
+        window.ERP_PRINT_DOC_NO = String(docNo);
+    }
+    var btn = document.getElementById('tbPreview');
+    if (!btn) return;
+    if (window.ERP_PRINT_DOC_NO) {
+        btn.disabled = false;
+        btn.title = 'Preview';
+    }
+};
+
 function erpOpenPrintPreview(docCode, docType, docNo) {
+    docNo = docNo || window.ERP_PRINT_DOC_NO || '';
     if (!docNo) return;
     var box   = document.getElementById('erpPrintPreview');
     var frame = document.getElementById('erpPrintPreviewFrame');
@@ -792,6 +808,11 @@ function erpOpenPrintPreview(docCode, docType, docNo) {
         + '&embed=1';
     box.style.display = 'flex';
     frame.focus();
+}
+
+// Viewing a saved document → Preview stays available
+if (window.ERP_PRINT_DOC_NO) {
+    window.erpToolbarEnablePreview();
 }
 
 function erpClosePrintPreview() {

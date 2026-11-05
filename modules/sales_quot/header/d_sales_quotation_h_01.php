@@ -1254,7 +1254,11 @@ $sq_self_url = '/' . ltrim(
         window.location.href = erpNavUrl('doc_type=<?php echo urlencode($selected_doc_type); ?>');
     };
     window.erpToolbar.onPreview = function () {
-        erpOpenPrintPreview(<?php echo json_encode($target_code); ?>, <?php echo json_encode($selected_doc_type); ?>, <?php echo json_encode($is_view_mode ? $doc_no : ''); ?>);
+        erpOpenPrintPreview(
+            <?php echo json_encode($target_code); ?>,
+            <?php echo json_encode($selected_doc_type); ?>,
+            window.ERP_PRINT_DOC_NO || <?php echo json_encode($is_view_mode ? $doc_no : ''); ?>
+        );
     };
     window.erpToolbar.onDocSelect = function (doc_no) {
         window.location.href = erpNavUrl('doc_no=' + encodeURIComponent(doc_no)
@@ -1336,6 +1340,9 @@ $sq_self_url = '/' . ltrim(
     (function () {
         var tbSave = document.getElementById('tbSave');
         if (tbSave) tbSave.disabled = true;
+        if (typeof erpToolbarEnablePreview === 'function') {
+            erpToolbarEnablePreview(<?php echo json_encode($_GET['doc_no'] ?? $doc_no ?? ''); ?>);
+        }
         window.ERP_PREV_DOC_NO = <?php echo json_encode($_save_prev_doc ?? ''); ?>;
         window.ERP_NEXT_DOC_NO = <?php echo json_encode($_save_next_doc ?? ''); ?>;
         var tbPrior = document.getElementById('tbPrior');

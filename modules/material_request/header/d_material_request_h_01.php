@@ -778,7 +778,9 @@ if ($is_view_mode) {
         (function () {
             var tbPrior = document.getElementById('tbPrior');
             if (tbPrior) tbPrior.disabled = (PREV_DOC_NO === '');
-            var tbPreview = document.getElementById('tbPreview');
-            if (tbPreview) tbPreview.disabled = <?php echo (!$is_view_mode || empty($doc_no)) ? 'true' : 'false'; ?>;
+            if (typeof erpToolbarEnablePreview === 'function'
+                && <?php echo (!$is_view_mode || empty($doc_no)) ? 'false' : 'true'; ?>) {
+                erpToolbarEnablePreview(<?php echo json_encode($doc_no); ?>);
+            }
         })();
     </script>

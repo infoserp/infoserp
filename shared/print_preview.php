@@ -93,6 +93,10 @@ $pdf_url = erp_url('shared/print_preview') . '?' . http_build_query([
     <link href="<?php echo htmlspecialchars(erp_asset('vendor/font-awesome/css/font-awesome.min.css'), ENT_QUOTES, 'UTF-8'); ?>" rel="stylesheet" type="text/css">
     <link rel="stylesheet" href="<?php echo htmlspecialchars(erp_asset_v('assets/css/erp_document.css'), ENT_QUOTES, 'UTF-8'); ?>">
     <link rel="stylesheet" href="<?php echo htmlspecialchars(erp_asset_v('assets/css/erp_print.css'), ENT_QUOTES, 'UTF-8'); ?>">
+    <style>
+        /* Toolbar keeps Inter; A4 sheets use erp_print.css print fonts (not Inter). */
+        body.erp-print-page .erp-print-bar { font-family: 'Inter', system-ui, sans-serif; }
+    </style>
 </head>
 <body class="erp-print-page">
 

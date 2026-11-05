@@ -665,7 +665,11 @@ if (!function_exists('stoLocationOptions')) {
 
         // PREVIEW — print preview of the saved document (print format from Document Setup)
         window.erpToolbar.onPreview = function () {
-            erpOpenPrintPreview(<?php echo json_encode($sto_doc_code); ?>, CURRENT_DOC_TYPE, <?php echo json_encode($is_view_mode ? $doc_no : ''); ?>);
+            erpOpenPrintPreview(
+                <?php echo json_encode($sto_doc_code); ?>,
+                CURRENT_DOC_TYPE,
+                window.ERP_PRINT_DOC_NO || <?php echo json_encode($is_view_mode ? $doc_no : ''); ?>
+            );
         };
 
         window.erpToolbar.onPrior = navPrior;
